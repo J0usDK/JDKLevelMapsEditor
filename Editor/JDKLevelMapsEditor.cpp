@@ -1,117 +1,148 @@
 #include "StdAfx.h"
 #include "JDKLevelMapsEditor.h"
 
-#include <cmath>
-
 #include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QCheckBox>
 #include <QLineEdit>
-#include <QPushButton>
 #include <QFormLayout>
 #include <QVBoxLayout>
 #include <QMessageBox>
 #include <QProgressBar>
 
-#include <Cry3DEngine/I3DEngine.h>
-
 #include "Components/MapPreview.h"
+#include "Components/GenerateButton.h"
+#include "ViewModels/LevelMapsViewModel.h"
 
-#include "../Core/Baking/IMapBaker.h"
-#include "../Core/Baking/BakeManager.h"
-#include "../Core/Baking/BakeRunResult.h"
-#include "../Core/Baking/LevelBakeContext.h"
-#include "../Core/Baking/BakeProgress.h"
-#include "../Core/FileSystem/PathResolver.h"
-#include "Shared/MapHeader.h"
-
-#include "../Utils/ConvertUtils.h"
-#include "../Settings/BakerSettings.h"
+#include "Settings/BakerSettings.h"
+#include "Utils/ConvertUtils.h"
+#include "Utils/Logger.h"
 
 CJDKLevelMapsEditor::CJDKLevelMapsEditor(QWidget* pParent) : CDockableEditor(pParent)
 {
 	m_pRootWidget = new QWidget();
-	m_pBakerSettings = std::make_unique<JDKLevelMaps::Settings::SBakerSettings>();
-	m_pPathResolver = std::make_unique<JDKLevelMaps::FileSystem::CPathResolver>();
-	m_pBakeManager = std::make_unique<JDKLevelMaps::Baking::CBakeManager>(m_pPathResolver.get(), m_pBakerSettings.get());
+	m_pViewModel = new JDKLevelMaps::ViewModels::CLevelMapsViewModel(this);
 
 	LoadSettings();
 	SetupWidget(m_pRootWidget);
 	SetupConnections();
 	SetContent(m_pRootWidget);
 
-	auto currentBaker = m_pBakeManager->GetBaker(JDKLevelMaps::EMapType::VegetationDensity);
-	if (auto path = m_pPathResolver.get()->GetImagePath(currentBaker->GetId()))
-		RefreshPreview(path.value());
+	UpdateLevelState(false);
+	m_pViewModel->CheckPreviewAvailability();
 }
 
-CJDKLevelMapsEditor::~CJDKLevelMapsEditor()
-{
-	if (m_bakeThread.joinable())
-	{
-		CryLogAlways("[JDKLevelMaps] Editor closed. Waiting for background baking thread to finish securely...");
-		m_bakeThread.join();
-	}
-}
+const char* CJDKLevelMapsEditor::GetEditorName() const noexcept { return "JDK Level Maps"; }
 
 void CJDKLevelMapsEditor::OnEditorNotifyEvent(EEditorNotifyEvent event)
 {
-	if (event != eNotify_OnEndLoad)
-		return;
+	switch (event)
+	{
+	case eNotify_OnBeginSceneClose:
+	case eNotify_OnBeginNewScene:
+	case eNotify_OnBeginLoad:
+		UpdateLevelState(false);
+		break;
+	case eNotify_OnEndLoad:
+		UpdateLevelState(true);
+		break;
+	}
+}
 
-	m_pPathResolver->RecomputePath();
+void CJDKLevelMapsEditor::UpdateUIState()
+{
+	const auto state = m_pViewModel->GetCurrentOperationState();
+	const bool hasPreview = m_pMapPreview->HasPixmap();
 
-	auto currentBaker = m_pBakeManager->GetBaker(JDKLevelMaps::EMapType::VegetationDensity);
-	if (auto path = m_pPathResolver->GetImagePath(currentBaker->GetId()))
-		RefreshPreview(path.value());
-	else
-		m_pMapPreview->setText("No preview generated yet");
+	switch (state)
+	{
+	case JDKLevelMaps::ViewModels::EOperationState::Idle:
+		m_pGenerateButton->setEnabled(m_bLevelLoaded);
+		m_pGenerateButton->SetButtonState(JDKLevelMaps::Components::EButtonState::Start);
+		m_pMapPreview->EnableLoadButton(true);
+		m_pMapPreview->ShowLoadButton(JDKLevelMaps::Components::EButtonState::Start, !hasPreview && m_bHasMap);
+		break;
+	case JDKLevelMaps::ViewModels::EOperationState::BakingMap:
+		m_pGenerateButton->setEnabled(true);
+		m_pGenerateButton->SetButtonState(JDKLevelMaps::Components::EButtonState::Stop);
+		m_pMapPreview->ShowLoadButton(false);
+		break;
+	case JDKLevelMaps::ViewModels::EOperationState::LoadingPreview:
+		m_pGenerateButton->setEnabled(false);
+		m_pMapPreview->ShowLoadButton(JDKLevelMaps::Components::EButtonState::Stop, true);
+		break;
+	case JDKLevelMaps::ViewModels::EOperationState::CancellingBake:
+		m_pGenerateButton->setEnabled(false);
+		m_pGenerateButton->SetButtonState(JDKLevelMaps::Components::EButtonState::Cancelling);
+		m_pMapPreview->ShowLoadButton(false);
+		break;
+	case JDKLevelMaps::ViewModels::EOperationState::CancellingPreview:
+		m_pGenerateButton->setEnabled(false);
+		m_pMapPreview->EnableLoadButton(false);
+		m_pMapPreview->ShowLoadButton(JDKLevelMaps::Components::EButtonState::Cancelling, true);
+		break;
+	}
+}
+
+void CJDKLevelMapsEditor::UpdateLevelState(bool bLevelLoaded)
+{
+	m_bLevelLoaded = bLevelLoaded;
+	m_pViewModel->RecomputePaths();
+	UpdateUIState();
 }
 
 void CJDKLevelMapsEditor::SetupWidget(QWidget* pWidget)
 {
 	m_pMapPreview = new JDKLevelMaps::Components::CMapPreview(pWidget);
+	m_pGenerateButton = new JDKLevelMaps::Components::CGenerateButton(pWidget);
 	m_pCellSizeSpinBox = new QDoubleSpinBox(pWidget);
 	m_pTileSizeSpinBox = new QSpinBox(pWidget);
-	m_pSensetivitySpinBox = new QSpinBox(pWidget);
+	m_pSensitivitySpinBox = new QSpinBox(pWidget);
 	m_pGrassCheckBox = new QCheckBox(pWidget);
 	m_pBushCheckBox = new QCheckBox(pWidget);
 	m_pTreeCheckBox = new QCheckBox(pWidget);
 	m_pGrassLineEdit = new QLineEdit(pWidget);
 	m_pBushLineEdit = new QLineEdit(pWidget);
 	m_pTreeLineEdit = new QLineEdit(pWidget);
-	m_pGenerateButton = new QPushButton(tr("Generate"), pWidget);
+	m_pGenerateImageCheckBox = new QCheckBox(pWidget);
 	m_pProgressBar = new QProgressBar(pWidget);
 
-	const int terrainSize = JDKLevelMaps::Baking::GetLevelTerrainSize();
-	const double maxCellSize = terrainSize > 0 ? static_cast<double>(terrainSize) : 8192.0;
-	const int maxTileSize = terrainSize > 0 ? static_cast<int>(terrainSize / m_pBakerSettings->cellSize) : 8192.0;
+	const auto& currentSettings = m_pViewModel->GetSettings();
+
+	m_pGenerateButton->SetButtonState(JDKLevelMaps::Components::EButtonState::Start);
+	m_pGenerateButton->SetText(JDKLevelMaps::Components::EButtonState::Start, tr("Generate"));
+	m_pGenerateButton->SetText(JDKLevelMaps::Components::EButtonState::Stop, tr("Stop"));
+	m_pGenerateButton->SetText(JDKLevelMaps::Components::EButtonState::Cancelling, tr("Cancelling..."));
 
 	m_pCellSizeSpinBox->setDecimals(2);
 	m_pCellSizeSpinBox->setSingleStep(0.5);
-	m_pCellSizeSpinBox->setRange(0.1, maxCellSize);
-	m_pCellSizeSpinBox->setValue(m_pBakerSettings->cellSize);
+	m_pCellSizeSpinBox->setRange(0.1, m_pViewModel->GetMaxCellSize());
+	m_pCellSizeSpinBox->setValue(currentSettings.cellSize);
 
 	m_pTileSizeSpinBox->setMinimum(1);
-	m_pTileSizeSpinBox->setMaximum(maxTileSize);
-	m_pTileSizeSpinBox->setValue(m_pBakerSettings->tileSize);
+	m_pTileSizeSpinBox->setMaximum(m_pViewModel->CalculateMaxTileSize(currentSettings.cellSize));
+	m_pTileSizeSpinBox->setValue(currentSettings.tileSize);
 
-	m_pSensetivitySpinBox->setMinimum(0);
-	m_pSensetivitySpinBox->setMaximum(255);
-	m_pSensetivitySpinBox->setValue(m_pBakerSettings->vegSettings.densityPerInstance);
+	m_pSensitivitySpinBox->setMinimum(0);
+	m_pSensitivitySpinBox->setMaximum(255);
+	m_pSensitivitySpinBox->setValue(currentSettings.vegSettings.densityPerInstance);
 
-	m_pGrassCheckBox->setChecked(m_pBakerSettings->vegSettings.enableGrass);
-	m_pBushCheckBox->setChecked(m_pBakerSettings->vegSettings.enableBush);
-	m_pTreeCheckBox->setChecked(m_pBakerSettings->vegSettings.enableTree);
+	m_pGrassCheckBox->setChecked(currentSettings.vegSettings.bEnableGrass);
+	m_pBushCheckBox->setChecked(currentSettings.vegSettings.bEnableBush);
+	m_pTreeCheckBox->setChecked(currentSettings.vegSettings.bEnableTree);
 
-	m_pGrassLineEdit->setText(QString::fromStdString(m_pBakerSettings->vegSettings.grassGroupName));
-	m_pBushLineEdit->setText(QString::fromStdString(m_pBakerSettings->vegSettings.bushGroupName));
-	m_pTreeLineEdit->setText(QString::fromStdString(m_pBakerSettings->vegSettings.treeGroupName));
+	m_pGrassLineEdit->setText(QString::fromStdString(currentSettings.vegSettings.grassGroupName));
+	m_pBushLineEdit->setText(QString::fromStdString(currentSettings.vegSettings.bushGroupName));
+	m_pTreeLineEdit->setText(QString::fromStdString(currentSettings.vegSettings.treeGroupName));
+
+	m_pGenerateImageCheckBox->setChecked(currentSettings.bGenerateDebugImage);
+	m_pGenerateImageCheckBox->setToolTip(tr("Generates a .png preview of the baked map on the disk.\n"
+		"Warning: Exporting large maps may take a long time and consume a lot of RAM."));
 
 	QFormLayout* pForm = new QFormLayout();
 	pForm->addRow(tr("Cell Size"), m_pCellSizeSpinBox);
 	pForm->addRow(tr("Tile Size"), m_pTileSizeSpinBox);
-	pForm->addRow(tr("Sensetivity"), m_pSensetivitySpinBox);
+	pForm->addRow(tr("Sensitivity"), m_pSensitivitySpinBox);
 	pForm->addRow(tr("Enable Grass Layer"), m_pGrassCheckBox);
 	pForm->addRow(tr("Enable Bush Layer"), m_pBushCheckBox);
 	pForm->addRow(tr("Enable Tree Layer"), m_pTreeCheckBox);
@@ -119,140 +150,189 @@ void CJDKLevelMapsEditor::SetupWidget(QWidget* pWidget)
 	pForm->addRow(tr("Bush Group Name"), m_pBushLineEdit);
 	pForm->addRow(tr("Tree Group Name"), m_pTreeLineEdit);
 
+	QHBoxLayout* pButtonLayout = new QHBoxLayout();
+	pButtonLayout->setContentsMargins(0, 0, 0, 0);
+	pButtonLayout->addWidget(m_pGenerateButton, 1);
+	pButtonLayout->addWidget(m_pGenerateImageCheckBox, 0);
+
 	QVBoxLayout* const pLayout = new QVBoxLayout(pWidget);
 	pLayout->addWidget(m_pMapPreview, 1);
 	pLayout->addLayout(pForm);
-	pLayout->addWidget(m_pGenerateButton);
+	pLayout->addLayout(pButtonLayout);
 	pLayout->addWidget(m_pProgressBar);
 	pLayout->addStretch();
 }
 
 void CJDKLevelMapsEditor::SetupConnections()
 {
-	connect(m_pGenerateButton, &QPushButton::clicked, this, &CJDKLevelMapsEditor::OnGenerateButtonClicked);
+	auto& settings = m_pViewModel->GetSettings();
 
-	connect(m_pCellSizeSpinBox, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double value) {
-		m_pBakerSettings->cellSize = static_cast<float>(value);
+	connect(m_pGenerateButton, &JDKLevelMaps::Components::CGenerateButton::buttonClicked, this, &CJDKLevelMapsEditor::OnGenerateButtonClicked);
 
-		const int terrainSize = JDKLevelMaps::Baking::GetLevelTerrainSize();
-		const double safeTerrainSize = terrainSize > 0 ? static_cast<double>(terrainSize) : 8192.0;
-		const int maxTileSize = std::max(1, static_cast<int>(std::round(safeTerrainSize / m_pBakerSettings->cellSize)));
+	connect(m_pMapPreview, &JDKLevelMaps::Components::CMapPreview::loadPreviewClicked, this, &CJDKLevelMapsEditor::OnLoadPreviewButtonClicked);
 
-		m_pTileSizeSpinBox->setMaximum(maxTileSize);
+	connect(m_pViewModel, &JDKLevelMaps::ViewModels::CLevelMapsViewModel::operationStateChanged, this, &CJDKLevelMapsEditor::OnOperationStateChanged);
+	
+	connect(m_pViewModel, &JDKLevelMaps::ViewModels::CLevelMapsViewModel::progressUpdated, m_pProgressBar, &QProgressBar::setValue);
+
+	connect(m_pViewModel, &JDKLevelMaps::ViewModels::CLevelMapsViewModel::bakeFinished, this, &CJDKLevelMapsEditor::OnBakeFinished);
+
+	connect(m_pViewModel, &JDKLevelMaps::ViewModels::CLevelMapsViewModel::previewLoadFailed, this, &CJDKLevelMapsEditor::OnPreviewLoadFailed);
+
+	connect(m_pViewModel, &JDKLevelMaps::ViewModels::CLevelMapsViewModel::previewAvailabilityChanged, this, &CJDKLevelMapsEditor::OnPreviewAvailabilityChanged);
+
+	connect(m_pViewModel, &JDKLevelMaps::ViewModels::CLevelMapsViewModel::previewLoaded, this, &CJDKLevelMapsEditor::OnPreviewLoaded);
+
+	connect(m_pCellSizeSpinBox, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &CJDKLevelMapsEditor::OnCellSizeChanged);
+
+	connect(m_pGenerateImageCheckBox, &QCheckBox::toggled, this, [&](bool bChecked)
+	{
+		settings.bGenerateDebugImage = bChecked;
+		SaveSettings();
+	});
+	
+
+	connect(m_pTileSizeSpinBox, qOverload<int>(&QSpinBox::valueChanged), this, [&](int value) {
+		settings.tileSize = static_cast<uint32>(value);
 		SaveSettings();
 	});
 
-	connect(m_pTileSizeSpinBox, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
-		m_pBakerSettings->tileSize = static_cast<uint32>(value);
-		SaveSettings();
+	connect(m_pSensitivitySpinBox, qOverload<int>(&QSpinBox::valueChanged), this, [&](int value) {
+		settings.vegSettings.densityPerInstance = static_cast<uint8>(value);
+		SaveVegetationSettings(settings.vegSettings);
 	});
 
-	connect(m_pSensetivitySpinBox, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
-		m_pBakerSettings->vegSettings.densityPerInstance = static_cast<uint8>(value);
-		SaveVegetationSettings(m_pBakerSettings->vegSettings);
+	connect(m_pGrassCheckBox, &QCheckBox::toggled, this, [&](bool bChecked) {
+		settings.vegSettings.bEnableGrass = bChecked;
+		SaveVegetationSettings(settings.vegSettings);
 	});
 
-	connect(m_pGrassCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
-		m_pBakerSettings->vegSettings.enableGrass = checked;
-		SaveVegetationSettings(m_pBakerSettings->vegSettings);
+	connect(m_pBushCheckBox, &QCheckBox::toggled, this, [&](bool bChecked) {
+		settings.vegSettings.bEnableBush = bChecked;
+		SaveVegetationSettings(settings.vegSettings);
 	});
 
-	connect(m_pBushCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
-		m_pBakerSettings->vegSettings.enableBush = checked;
-		SaveVegetationSettings(m_pBakerSettings->vegSettings);
+	connect(m_pTreeCheckBox, &QCheckBox::toggled, this, [&](bool bChecked) {
+		settings.vegSettings.bEnableTree = bChecked;
+		SaveVegetationSettings(settings.vegSettings);
 	});
 
-	connect(m_pTreeCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
-		m_pBakerSettings->vegSettings.enableTree = checked;
-		SaveVegetationSettings(m_pBakerSettings->vegSettings);
+	connect(m_pGrassLineEdit, &QLineEdit::editingFinished, this, [&]() {
+		settings.vegSettings.grassGroupName = m_pGrassLineEdit->text().toStdString();
+		SaveVegetationSettings(settings.vegSettings);
 	});
 
-	connect(m_pGrassLineEdit, &QLineEdit::editingFinished, this, [this]() {
-		m_pBakerSettings->vegSettings.grassGroupName = m_pGrassLineEdit->text().toStdString();
-		SaveVegetationSettings(m_pBakerSettings->vegSettings);
+	connect(m_pBushLineEdit, &QLineEdit::editingFinished, this, [&]() {
+		settings.vegSettings.bushGroupName = m_pBushLineEdit->text().toStdString();
+		SaveVegetationSettings(settings.vegSettings);
 	});
 
-	connect(m_pBushLineEdit, &QLineEdit::editingFinished, this, [this]() {
-		m_pBakerSettings->vegSettings.bushGroupName = m_pBushLineEdit->text().toStdString();
-		SaveVegetationSettings(m_pBakerSettings->vegSettings);
-	});
-
-	connect(m_pTreeLineEdit, &QLineEdit::editingFinished, this, [this]() {
-		m_pBakerSettings->vegSettings.treeGroupName = m_pTreeLineEdit->text().toStdString();
-		SaveVegetationSettings(m_pBakerSettings->vegSettings);
+	connect(m_pTreeLineEdit, &QLineEdit::editingFinished, this, [&]() {
+		settings.vegSettings.treeGroupName = m_pTreeLineEdit->text().toStdString();
+		SaveVegetationSettings(settings.vegSettings);
 	});
 }
 
-void CJDKLevelMapsEditor::RefreshPreview(const std::string& imagePath)
+void CJDKLevelMapsEditor::OnGenerateButtonClicked(JDKLevelMaps::Components::EButtonState clickedState)
 {
-	const QPixmap pixmap(QString::fromStdString(imagePath));
-	if (pixmap.isNull())
+	if (clickedState == JDKLevelMaps::Components::EButtonState::Start)
 	{
-		m_pMapPreview->SetPixmap(QPixmap());
-		m_pMapPreview->setText(tr("No preview generated yet"));
+		m_pProgressBar->setValue(0);
+		m_pViewModel->StartBaking();
+	}
+	else
+		m_pViewModel->StopBaking();
+}
+
+void CJDKLevelMapsEditor::OnLoadPreviewButtonClicked(bool bStart)
+{
+	if (bStart)
+	{
+		m_pProgressBar->setValue(0);
+		m_pViewModel->LoadPreviewAsync();
+	}
+	else
+		m_pViewModel->StopLoadingPreview();
+}
+
+void CJDKLevelMapsEditor::OnOperationStateChanged()
+{
+	UpdateUIState();
+}
+
+void CJDKLevelMapsEditor::OnBakeFinished(bool bSuccess, QString message)
+{
+	if (!bSuccess)
+	{
+		m_pProgressBar->setValue(0);
+
+		if (!m_pViewModel->IsOperationCancelled())
+			ShowError("Vegetation Level Map baking failed with error", message);
+		else
+			JDK_LOG("Level Map baking was cancelled by user");
+	}
+	else
+	{
+		m_pProgressBar->setValue(100);
+		JDK_LOG("Vegetation Level Map has been baked successfully");
+	}
+}
+
+void CJDKLevelMapsEditor::OnPreviewAvailabilityChanged(bool bHasMap, bool bHasImage, QString imagePath)
+{
+	if (!m_bLevelLoaded)
+	{
+		m_pMapPreview->ResetPixmap(tr("No level loaded"));
 		return;
 	}
 
-	m_pMapPreview->SetPixmap(pixmap);
+	if (bHasImage)
+	{
+		m_pMapPreview->ResetPixmap(tr("Loading preview image..."));
+		m_pViewModel->LoadPreviewAsync(imagePath);
+		return;
+	}
+
+	m_bHasMap = bHasMap;
+	m_pMapPreview->ResetPixmap(tr("No preview generated yet"));
+	UpdateUIState();
 }
 
-void CJDKLevelMapsEditor::OnGenerateButtonClicked()
+void CJDKLevelMapsEditor::OnPreviewLoaded(QImage image)
 {
-	m_pGenerateButton->setEnabled(false);
+	m_pProgressBar->setValue(100);
+	m_pMapPreview->SetPixmap(QPixmap::fromImage(image));
+}
+
+void CJDKLevelMapsEditor::OnPreviewLoadFailed(QString message)
+{
 	m_pProgressBar->setValue(0);
 
-	if (m_bakeThread.joinable())
-		m_bakeThread.join();
+	if (!m_pViewModel->IsOperationCancelled())
+		ShowError("Preview Image generation failed with error", message);
+	else
+		JDK_LOG("Preview loading was cancelled by user");
 
-	auto pProgress = std::make_shared<JDKLevelMaps::Baking::SBakeProgress>();
-
-	QTimer* pTimer = new QTimer(this);
-	connect(pTimer, &QTimer::timeout, this, [this, pProgress, pTimer]()
-	{
-		int percent = static_cast<int>((pProgress->writeProgress.load() + pProgress->imageProgress.load()) / 2.0f * 100.0f);
-		m_pProgressBar->setValue(percent);
-
-		if (pProgress->isCompleted.load())
-		{
-			m_pProgressBar->setValue(100);
-			pTimer->stop();
-			pTimer->deleteLater();
-
-			m_pGenerateButton->setEnabled(true);
-			if (pProgress->isSuccess.load())
-			{
-				CryLogAlways("[JDKLevelMaps] Vegetation Level Map has been baked successfully");
-				auto currentBaker = m_pBakeManager->GetBaker(JDKLevelMaps::EMapType::VegetationDensity);
-				if (auto path = m_pPathResolver.get()->GetImagePath(currentBaker->GetId()))
-					RefreshPreview(path.value());
-			}
-			else
-			{
-				CryWarning(VALIDATOR_MODULE_EDITOR, VALIDATOR_ERROR, "[JDKLevelMaps] Vegetation Level Map baking failed with error: %s", pProgress->resultMessage.c_str());
-				QMessageBox::critical(this, tr("Bake Failed"), QString::fromStdString(pProgress->resultMessage));
-			}
-		}
-	});
-
-	pTimer->start(33);
-	m_bakeThread = std::thread([this, pProgress]()
-	{
-		JDKLevelMaps::Baking::SBakeRunResult result = m_pBakeManager->RunBake(JDKLevelMaps::EMapType::VegetationDensity, pProgress);
-
-		pProgress->resultMessage = result.message;
-		pProgress->isSuccess.store(result.success);
-		pProgress->isCompleted.store(true);
-	});
+	m_pViewModel->CheckPreviewAvailability();
 }
 
-const char* CJDKLevelMapsEditor::GetEditorName() const { return "JDK Level Maps"; }
+void CJDKLevelMapsEditor::OnCellSizeChanged(double value)
+{
+	auto& settings = m_pViewModel->GetSettings();
+	settings.cellSize = static_cast<float>(value);
 
+	m_pTileSizeSpinBox->setMaximum(m_pViewModel->CalculateMaxTileSize(settings.cellSize));
+	SaveSettings();
+}
 
 void CJDKLevelMapsEditor::SaveSettings()
 {
-	SetProjectProperty("JDKLevelMaps/CellSize", m_pBakerSettings->cellSize);
-	SetProjectProperty("JDKLevelMaps/TileSize", m_pBakerSettings->tileSize);
-	SaveVegetationSettings(m_pBakerSettings->vegSettings);
+	const auto& settings = m_pViewModel->GetSettings();
+
+	SetProjectProperty("JDKLevelMaps/CellSize", settings.cellSize);
+	SetProjectProperty("JDKLevelMaps/TileSize", settings.tileSize);
+	SetProjectProperty("JDKLevelMaps/GenerateDebugImage", settings.bGenerateDebugImage);
+	SaveVegetationSettings(settings.vegSettings);
 }
 
 void CJDKLevelMapsEditor::SaveVegetationSettings(const JDKLevelMaps::Settings::SVegetationBakerSettings& vegSettings)
@@ -261,24 +341,24 @@ void CJDKLevelMapsEditor::SaveVegetationSettings(const JDKLevelMaps::Settings::S
 	SetProjectProperty("JDKLevelMaps/GrassGroupName", QString::fromStdString(vegSettings.grassGroupName));
 	SetProjectProperty("JDKLevelMaps/BushGroupName", QString::fromStdString(vegSettings.bushGroupName));
 	SetProjectProperty("JDKLevelMaps/TreeGroupName", QString::fromStdString(vegSettings.treeGroupName));
-	SetProjectProperty("JDKLevelMaps/EnableGrass", vegSettings.enableGrass);
-	SetProjectProperty("JDKLevelMaps/EnableBush", vegSettings.enableBush);
-	SetProjectProperty("JDKLevelMaps/EnableTree", vegSettings.enableTree);
+	SetProjectProperty("JDKLevelMaps/EnableGrass", vegSettings.bEnableGrass);
+	SetProjectProperty("JDKLevelMaps/EnableBush", vegSettings.bEnableBush);
+	SetProjectProperty("JDKLevelMaps/EnableTree", vegSettings.bEnableTree);
 }
 
 void CJDKLevelMapsEditor::LoadSettings()
 {
-	int terrainSize = JDKLevelMaps::Baking::GetLevelTerrainSize();
-	const float maxCellSize = terrainSize > 0 ? static_cast<float>(terrainSize) : 8192.0f;
+	auto& settings = m_pViewModel->GetSettings();
 
-	const float loadedCellSize = JDKLevelMaps::Utils::ConvertUtils::QVariantToFloat(GetProjectProperty("JDKLevelMaps/CellSize"), m_pBakerSettings->cellSize);
-	m_pBakerSettings->cellSize = std::clamp(loadedCellSize, 0.1f, maxCellSize);
+	const float loadedCellSize = JDKLevelMaps::Utils::ConvertUtils::QVariantToFloat(GetProjectProperty("JDKLevelMaps/CellSize"), settings.cellSize);
+	settings.cellSize = std::clamp(loadedCellSize, 0.1f, m_pViewModel->GetMaxCellSize());
 
-	const uint32 loadedTileSize = JDKLevelMaps::Utils::ConvertUtils::QVariantToUint32(GetProjectProperty("JDKLevelMaps/TileSize"), m_pBakerSettings->tileSize);
-	const uint32 maxTileSize = std::max(1u, static_cast<uint32>(std::round(terrainSize / m_pBakerSettings->cellSize)));
-	m_pBakerSettings->tileSize = std::clamp(loadedTileSize, static_cast<uint32>(1), maxTileSize);
+	const uint32 loadedTileSize = JDKLevelMaps::Utils::ConvertUtils::QVariantToUint32(GetProjectProperty("JDKLevelMaps/TileSize"), settings.tileSize);
+	settings.tileSize = std::clamp(loadedTileSize, static_cast<uint32>(1), m_pViewModel->CalculateMaxTileSize(settings.cellSize));
 
-	LoadVegetationSettings(m_pBakerSettings->vegSettings);
+	settings.bGenerateDebugImage = JDKLevelMaps::Utils::ConvertUtils::QVariantToBool(GetProjectProperty("JDKLevelMaps/GenerateDebugImage"), settings.bGenerateDebugImage);
+
+	LoadVegetationSettings(settings.vegSettings);
 }
 
 void CJDKLevelMapsEditor::LoadVegetationSettings(JDKLevelMaps::Settings::SVegetationBakerSettings& vegSettings)
@@ -287,9 +367,15 @@ void CJDKLevelMapsEditor::LoadVegetationSettings(JDKLevelMaps::Settings::SVegeta
 	vegSettings.grassGroupName = JDKLevelMaps::Utils::ConvertUtils::QVariantToStdString(GetProjectProperty("JDKLevelMaps/GrassGroupName"), vegSettings.grassGroupName);
 	vegSettings.bushGroupName = JDKLevelMaps::Utils::ConvertUtils::QVariantToStdString(GetProjectProperty("JDKLevelMaps/BushGroupName"), vegSettings.bushGroupName);
 	vegSettings.treeGroupName = JDKLevelMaps::Utils::ConvertUtils::QVariantToStdString(GetProjectProperty("JDKLevelMaps/TreeGroupName"), vegSettings.treeGroupName);
-	vegSettings.enableGrass = JDKLevelMaps::Utils::ConvertUtils::QVariantToBool(GetProjectProperty("JDKLevelMaps/EnableGrass"), vegSettings.enableGrass);
-	vegSettings.enableBush = JDKLevelMaps::Utils::ConvertUtils::QVariantToBool(GetProjectProperty("JDKLevelMaps/EnableBush"), vegSettings.enableBush);
-	vegSettings.enableTree = JDKLevelMaps::Utils::ConvertUtils::QVariantToBool(GetProjectProperty("JDKLevelMaps/EnableTree"), vegSettings.enableTree);
+	vegSettings.bEnableGrass = JDKLevelMaps::Utils::ConvertUtils::QVariantToBool(GetProjectProperty("JDKLevelMaps/EnableGrass"), vegSettings.bEnableGrass);
+	vegSettings.bEnableBush = JDKLevelMaps::Utils::ConvertUtils::QVariantToBool(GetProjectProperty("JDKLevelMaps/EnableBush"), vegSettings.bEnableBush);
+	vegSettings.bEnableTree = JDKLevelMaps::Utils::ConvertUtils::QVariantToBool(GetProjectProperty("JDKLevelMaps/EnableTree"), vegSettings.bEnableTree);
+}
+
+void CJDKLevelMapsEditor::ShowError(const QString& context, const QString& errorMsg)
+{
+	JDK_ERR("%s: \"%s\"", qPrintable(context), qPrintable(errorMsg));
+	QMessageBox::critical(this, tr("JDK Level Maps"), errorMsg);
 }
 
 REGISTER_VIEWPANE_FACTORY(CJDKLevelMapsEditor, "JDK Level Maps", "Tools", true);

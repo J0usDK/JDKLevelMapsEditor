@@ -7,6 +7,8 @@ namespace JDKLevelMaps::Settings
 	{
 		float cellSize = 1.0f;
 		uint32 tileSize = 64;
+		bool bGenerateDebugImage = false;
+
 		SVegetationBakerSettings vegSettings;
 	};
 }

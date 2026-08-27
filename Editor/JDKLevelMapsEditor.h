@@ -1,52 +1,54 @@
 #pragma once
-#include <thread>
-
 #include <EditorFramework/Editor.h>
 
 class QDoubleSpinBox;
 class QSpinBox;
 class QCheckBox;
 class QLineEdit;
-class QPushButton;
 class QProgressBar;
 
 namespace JDKLevelMaps::Components
 {
 	class CMapPreview;
+	class CGenerateButton;
+	enum class EButtonState : uint8;
 }
 
 namespace JDKLevelMaps::Settings
 {
-	struct SBakerSettings;
 	struct SVegetationBakerSettings;
 }
 
-namespace JDKLevelMaps::Baking
+namespace JDKLevelMaps::ViewModels
 {
-	class CBakeManager;
-}
-
-namespace JDKLevelMaps::FileSystem
-{
-	class CPathResolver;
+	class CLevelMapsViewModel;
 }
 
 class CJDKLevelMapsEditor final : public CDockableEditor, public IAutoEditorNotifyListener
 {
+	Q_OBJECT
 public:
 	CJDKLevelMapsEditor(QWidget* pParent = nullptr);
-	~CJDKLevelMapsEditor();
+	~CJDKLevelMapsEditor() = default;
 
 	void OnEditorNotifyEvent(EEditorNotifyEvent event) override;
+	const char* GetEditorName() const noexcept override;
 
-	const char* GetEditorName() const override;
+private slots:
+	void OnGenerateButtonClicked(JDKLevelMaps::Components::EButtonState clickedState);
+	void OnLoadPreviewButtonClicked(bool bStart);
+	void OnCellSizeChanged(double value);
+	void OnOperationStateChanged();
+	void OnBakeFinished(bool bSuccess, QString message);
+	void OnPreviewAvailabilityChanged(bool bHasMap, bool bHasImage, QString imagePath);
+	void OnPreviewLoaded(QImage image);
+	void OnPreviewLoadFailed(QString message);
 
 private:
+	void UpdateUIState();
+	void UpdateLevelState(bool bLevelLoaded);
 	void SetupWidget(QWidget* pWidget);
 	void SetupConnections();
-	void RefreshPreview(const std::string& imagePath);
-
-	void OnGenerateButtonClicked();
 
 	void LoadSettings();
 	void LoadVegetationSettings(JDKLevelMaps::Settings::SVegetationBakerSettings& vegSettings);
@@ -54,24 +56,26 @@ private:
 	void SaveSettings();
 	void SaveVegetationSettings(const JDKLevelMaps::Settings::SVegetationBakerSettings& vegSettings);
 
+	void ShowError(const QString& context, const QString& errorMsg);
+
 private:
 	QWidget* m_pRootWidget = nullptr;
 	QDoubleSpinBox* m_pCellSizeSpinBox = nullptr;
 	QSpinBox* m_pTileSizeSpinBox = nullptr;
-	QSpinBox* m_pSensetivitySpinBox = nullptr;
+	QSpinBox* m_pSensitivitySpinBox = nullptr;
 	QCheckBox* m_pGrassCheckBox = nullptr;
 	QCheckBox* m_pBushCheckBox = nullptr;
 	QCheckBox* m_pTreeCheckBox = nullptr;
+	QCheckBox* m_pGenerateImageCheckBox = nullptr;
 	QLineEdit* m_pGrassLineEdit = nullptr;
 	QLineEdit* m_pBushLineEdit = nullptr;
 	QLineEdit* m_pTreeLineEdit = nullptr;
-	QPushButton* m_pGenerateButton = nullptr;
-	JDKLevelMaps::Components::CMapPreview* m_pMapPreview = nullptr;
 	QProgressBar* m_pProgressBar = nullptr;
+	JDKLevelMaps::Components::CMapPreview* m_pMapPreview = nullptr;
+	JDKLevelMaps::Components::CGenerateButton* m_pGenerateButton = nullptr;
 
-	std::unique_ptr<JDKLevelMaps::Settings::SBakerSettings> m_pBakerSettings = nullptr;
-	std::unique_ptr<JDKLevelMaps::FileSystem::CPathResolver> m_pPathResolver = nullptr;
-	std::unique_ptr<JDKLevelMaps::Baking::CBakeManager> m_pBakeManager = nullptr;
+	JDKLevelMaps::ViewModels::CLevelMapsViewModel* m_pViewModel = nullptr;
 
-	std::thread m_bakeThread;
+	bool m_bLevelLoaded = false;
+	bool m_bHasMap = false;
 };

@@ -2,8 +2,6 @@
 #include <string>
 #include <optional>
 
-#include <IEditor.h>
-
 namespace JDKLevelMaps::FileSystem
 {
 	class CPathResolver
@@ -13,14 +11,14 @@ namespace JDKLevelMaps::FileSystem
 
 		void RecomputePath();
 
-		const std::optional<std::string> GetImagePath(const char* bakerId) const;
-		const std::optional<std::string> GetMapPath(const char* bakerId) const;
+		[[nodiscard]] std::optional<std::string> GetImagePath(const char* bakerId) const;
+		[[nodiscard]] std::optional<std::string> GetMapPath(const char* bakerId) const;
 
 	private:
-		std::string m_sDefaultPath = "";
+		std::string m_defaultPath;
 		bool m_bInitialized = false;
 
-		const std::string m_sMapExtension = ".jdkm";
-		const std::string m_sImageExtension = ".png";
+		static constexpr const char* kMapExtension = ".jdkm";
+		static constexpr const char* kImageExtension = ".png";
 	};
 }

@@ -8,12 +8,12 @@ namespace JDKLevelMaps::Settings
 	{
 		uint8 densityPerInstance = 20;
 
+		bool bEnableGrass = true;
+		bool bEnableBush = true;
+		bool bEnableTree = true;
+
 		std::string grassGroupName = "grass";
 		std::string bushGroupName = "bushes";
 		std::string treeGroupName = "trees";
-
-		bool enableGrass = true;
-		bool enableBush = true;
-		bool enableTree = true;
 	};
 }

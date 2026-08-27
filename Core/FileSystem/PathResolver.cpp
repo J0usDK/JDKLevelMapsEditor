@@ -1,39 +1,54 @@
 #include "StdAfx.h"
 #include "PathResolver.h"
 
+#include <IEditor.h>
+#include <ILevelEditor.h>
 #include <Cry3DEngine/I3DEngine.h>
 
 #include "Shared/MapHeader.h"
+#include "Utils/Logger.h"
 
-JDKLevelMaps::FileSystem::CPathResolver::CPathResolver()
+namespace JDKLevelMaps::FileSystem
 {
-	RecomputePath();
-}
+	CPathResolver::CPathResolver()
+	{
+		RecomputePath();
+	}
 
-void JDKLevelMaps::FileSystem::CPathResolver::RecomputePath()
-{
-	m_sDefaultPath = gEnv->p3DEngine->GetLevelFilePath("JDKLevelMaps");
+	void CPathResolver::RecomputePath()
+	{
+		m_bInitialized = false;
+		m_defaultPath.clear();
 
-	if (gEnv->pCryPak->MakeDir(m_sDefaultPath.c_str()))
+		ILevelEditor* pLevelEditor = GetIEditor()->GetLevelEditor();
+		if (!pLevelEditor || !pLevelEditor->IsLevelLoaded())
+			return;
+
+		m_defaultPath = gEnv->p3DEngine->GetLevelFilePath("JDKLevelMaps");
+
+		if (!gEnv->pCryPak->MakeDir(m_defaultPath.c_str()))
+		{
+			JDK_ERR("Can't create plugin directory: %s", m_defaultPath.c_str());
+			return;
+		}
+
+		m_defaultPath += "/";
 		m_bInitialized = true;
-	else
-		CryWarning(VALIDATOR_MODULE_EDITOR, VALIDATOR_ERROR, ("[JDKLevelMaps] Can't create plugin directory: " + m_sDefaultPath).c_str());
+	}
 
-	m_sDefaultPath += "/";
-}
+	std::optional<std::string> CPathResolver::GetMapPath(const char* bakerId) const
+	{
+		if (!m_bInitialized)
+			return std::nullopt;
 
-const std::optional<std::string> JDKLevelMaps::FileSystem::CPathResolver::GetMapPath(const char* bakerId) const
-{
-	if (!m_bInitialized)
-		return std::nullopt;
+		return m_defaultPath + bakerId + kMapExtension;
+	}
 
-	return m_sDefaultPath + bakerId + m_sMapExtension;
-}
+	std::optional<std::string> CPathResolver::GetImagePath(const char* bakerId) const
+	{
+		if (!m_bInitialized)
+			return std::nullopt;
 
-const std::optional<std::string> JDKLevelMaps::FileSystem::CPathResolver::GetImagePath(const char* bakerId) const
-{
-	if (!m_bInitialized)
-		return std::nullopt;
-
-	return m_sDefaultPath + bakerId + m_sImageExtension;
+		return m_defaultPath + bakerId + kImageExtension;
+	}
 }

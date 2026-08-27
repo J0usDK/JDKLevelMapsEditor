@@ -1,14 +1,17 @@
 #pragma once
+#include <cmath>
 #include <CryCore/BaseTypes.h>
 
 namespace JDKLevelMaps
 {
 	constexpr uint8 kLayerMapVersion = 3;
-	constexpr uint32 kLayerMapMagic = 'JDKM';
+	constexpr uint32 kLayerMapMagic = 0x4A444B4D;
 
 	enum class EMapType : uint8
 	{
-		VegetationDensity = 0
+		VegetationDensity = 0,
+
+		Count
 	};
 
 	enum class ETileEntryFormat : uint8
@@ -54,8 +57,46 @@ namespace JDKLevelMaps
 		"The size of STileEntry32 has been changed. Keep the in-game reader up to date.");
 
 	static_assert(sizeof(STileEntry64) == 16,
-		"The size of STileEntry32 has been changed. Keep the in-game reader up to date.");
+		"The size of STileEntry64 has been changed. Keep the in-game reader up to date.");
 
 	static_assert(sizeof(SMapHeader) == 40,
 		"The size of SMapHeader has been changed. Keep the in-game reader up to date.");
+
+	static_assert(std::is_trivially_copyable_v<STileEntry32>,
+		"STileEntry32 must be trivially copyable for binary I/O");
+
+	static_assert(std::is_trivially_copyable_v<STileEntry64>,
+		"STileEntry64 must be trivially copyable for binary I/O");
+
+	static_assert(std::is_trivially_copyable_v<SMapHeader>,
+		"SMapHeader must be trivially copyable for binary I/O");
+
+	[[nodiscard]] inline constexpr bool IsValidMapType(EMapType type) noexcept
+	{
+		return type < EMapType::Count;
+	}
+
+	[[nodiscard]] inline constexpr bool IsValidTileEntryFormat(ETileEntryFormat format) noexcept
+	{
+		return format == ETileEntryFormat::Compact_32 || format == ETileEntryFormat::Standard_64;
+	}
+
+	[[nodiscard]] inline constexpr bool IsValidMapHeader(const SMapHeader& header) noexcept
+	{
+		if (header.magic != kLayerMapMagic) return false;
+		if (header.version != kLayerMapVersion) return false;
+		if (!IsValidMapType(header.mapType)) return false;
+		if (!IsValidTileEntryFormat(header.entryFormat)) return false;
+		if (header.reserved != 0) return false;
+		if (header.gridWidth <= 0 || header.gridHeight <= 0) return false;
+		if (!std::isfinite(header.cellSize) || header.cellSize <= 0) return false;
+		if (header.tileSize == 0) return false;
+
+		const uint32 expectedTileCountX = static_cast<uint32>((static_cast<uint64>(header.gridWidth) + header.tileSize - 1) / header.tileSize);
+		const uint32 expectedTileCountY = static_cast<uint32>((static_cast<uint64>(header.gridHeight) + header.tileSize - 1) / header.tileSize);
+		
+		if (header.tileCountX != expectedTileCountX || header.tileCountY != expectedTileCountY) return false;
+
+		return true;
+	}
 }

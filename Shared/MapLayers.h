@@ -13,10 +13,10 @@ namespace JDKLevelMaps::MapLayers
 		Count
 	};
 
-	constexpr int32 ToChannelIndex(EVegetationLayers layer)
+	[[nodiscard]] inline constexpr int32 ToChannelIndex(EVegetationLayers layer) noexcept
 	{
 		return (layer > EVegetationLayers::Unknown && layer < EVegetationLayers::Count) ? static_cast<int32>(layer) - 1 : -1;
 	}
 
-	constexpr uint32 kVegetationChannelCount = static_cast<uint32>(EVegetationLayers::Count) - 1;
+	inline constexpr uint32 kVegetationChannelCount = static_cast<uint32>(EVegetationLayers::Count) - 1;
 }

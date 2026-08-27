@@ -13,7 +13,7 @@ public:
 	CJDKLevelMapsPlugin() { /* entry point of the plugin, perform initializations */ }
 	~CJDKLevelMapsPlugin() { /* exit point of the plugin, perform cleanup */ }
 
-	int32       GetPluginVersion() { return 1; }
-	const char* GetPluginName() { return "JDKLevelMaps"; }
-	const char* GetPluginDescription() { return "Editor extension for generating optimized runtime data maps from level information"; }
+	int32       GetPluginVersion() noexcept override { return 1; }
+	const char* GetPluginName() noexcept override { return "JDKLevelMaps"; }
+	const char* GetPluginDescription() noexcept override { return "Editor extension for generating optimized runtime data maps from level information"; }
 };
