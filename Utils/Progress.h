@@ -2,8 +2,6 @@
 #include <string>
 #include <atomic>
 
-#include <CryCore/BaseTypes.h>
-
 namespace JDKLevelMaps::Utils::Common
 {
 	struct SProgress

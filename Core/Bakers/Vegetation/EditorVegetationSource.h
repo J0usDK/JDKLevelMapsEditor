@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+
 #include <CryMath/Cry_Vector3.h>
 
 #include "Shared/MapLayers.h"

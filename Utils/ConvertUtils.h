@@ -1,6 +1,5 @@
 #pragma once
 #include <CryCore/BaseTypes.h>
-#include <CrySystem/ISystem.h>
 #include <QVariant>
 
 #include "Logger.h"

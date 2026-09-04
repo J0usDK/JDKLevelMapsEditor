@@ -1,6 +1,7 @@
 #pragma once
 #include <EditorFramework/Editor.h>
 
+class QComboBox;
 class QDoubleSpinBox;
 class QSpinBox;
 class QCheckBox;
@@ -40,7 +41,7 @@ private slots:
 	void OnCellSizeChanged(double value);
 	void OnOperationStateChanged();
 	void OnBakeFinished(bool bSuccess, QString message);
-	void OnPreviewAvailabilityChanged(bool bHasMap, bool bHasImage, QString imagePath);
+	void OnPreviewAvailabilityChanged(bool bHasMap, bool bHasImage);
 	void OnPreviewLoaded(QImage image);
 	void OnPreviewLoadFailed(QString message);
 
@@ -60,6 +61,7 @@ private:
 
 private:
 	QWidget* m_pRootWidget = nullptr;
+	QComboBox* m_pFormatComboBox = nullptr;
 	QDoubleSpinBox* m_pCellSizeSpinBox = nullptr;
 	QSpinBox* m_pTileSizeSpinBox = nullptr;
 	QSpinBox* m_pSensitivitySpinBox = nullptr;

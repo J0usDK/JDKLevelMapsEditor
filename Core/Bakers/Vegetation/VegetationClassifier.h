@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+
 #include <CryCore/BaseTypes.h>
 
 #include "Settings/VegetationBakerSettings.h"

@@ -4,7 +4,7 @@
 
 namespace JDKLevelMaps
 {
-	constexpr uint8 kLayerMapVersion = 3;
+	constexpr uint8 kLayerMapVersion = 4;
 	constexpr uint32 kLayerMapMagic = 0x4A444B4D;
 
 	enum class EMapType : uint8
@@ -16,30 +16,19 @@ namespace JDKLevelMaps
 
 	enum class ETileEntryFormat : uint8
 	{
-		Compact_32 = 0,	// offset: uint32, size: uint32 (8 bytes)
-		Standard_64 = 1	// offset: uint64, size: uint64 (16 bytes)
+		Bitmask = 0,
+		Hybrid_32 = 1,
+		Hybrid_64 = 2
 	};
 
 #pragma pack(push, 1)
-	struct STileEntry32
-	{
-		uint32 fileOffset = 0;
-		uint32 byteSize = 0;
-	};
-
-	struct STileEntry64
-	{
-		uint64 fileOffset = 0;
-		uint64 byteSize = 0;
-	};
-
 	struct SMapHeader
 	{
 		uint32 magic = kLayerMapMagic;
 		uint8 version = kLayerMapVersion;
 		EMapType mapType = EMapType::VegetationDensity;
-		ETileEntryFormat entryFormat = ETileEntryFormat::Compact_32;
-		uint8 reserved = 0; // currently not used, added for alignment
+		ETileEntryFormat entryFormat = ETileEntryFormat::Bitmask;
+		uint8 activeLayersMask = 0; // bitmask of active layers on map
 
 		int32 gridWidth = 0;
 		int32 gridHeight = 0;
@@ -53,20 +42,8 @@ namespace JDKLevelMaps
 	};
 #pragma pack(pop)
 
-	static_assert(sizeof(STileEntry32) == 8,
-		"The size of STileEntry32 has been changed. Keep the in-game reader up to date.");
-
-	static_assert(sizeof(STileEntry64) == 16,
-		"The size of STileEntry64 has been changed. Keep the in-game reader up to date.");
-
 	static_assert(sizeof(SMapHeader) == 40,
 		"The size of SMapHeader has been changed. Keep the in-game reader up to date.");
-
-	static_assert(std::is_trivially_copyable_v<STileEntry32>,
-		"STileEntry32 must be trivially copyable for binary I/O");
-
-	static_assert(std::is_trivially_copyable_v<STileEntry64>,
-		"STileEntry64 must be trivially copyable for binary I/O");
 
 	static_assert(std::is_trivially_copyable_v<SMapHeader>,
 		"SMapHeader must be trivially copyable for binary I/O");
@@ -78,7 +55,7 @@ namespace JDKLevelMaps
 
 	[[nodiscard]] inline constexpr bool IsValidTileEntryFormat(ETileEntryFormat format) noexcept
 	{
-		return format == ETileEntryFormat::Compact_32 || format == ETileEntryFormat::Standard_64;
+		return format == ETileEntryFormat::Bitmask || format == ETileEntryFormat::Hybrid_32 || format == ETileEntryFormat::Hybrid_64;
 	}
 
 	[[nodiscard]] inline constexpr bool IsValidMapHeader(const SMapHeader& header) noexcept
@@ -87,7 +64,6 @@ namespace JDKLevelMaps
 		if (header.version != kLayerMapVersion) return false;
 		if (!IsValidMapType(header.mapType)) return false;
 		if (!IsValidTileEntryFormat(header.entryFormat)) return false;
-		if (header.reserved != 0) return false;
 		if (header.gridWidth <= 0 || header.gridHeight <= 0) return false;
 		if (!std::isfinite(header.cellSize) || header.cellSize <= 0) return false;
 		if (header.tileSize == 0) return false;

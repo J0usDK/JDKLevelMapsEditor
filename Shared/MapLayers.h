@@ -17,6 +17,4 @@ namespace JDKLevelMaps::MapLayers
 	{
 		return (layer > EVegetationLayers::Unknown && layer < EVegetationLayers::Count) ? static_cast<int32>(layer) - 1 : -1;
 	}
-
-	inline constexpr uint32 kVegetationChannelCount = static_cast<uint32>(EVegetationLayers::Count) - 1;
 }

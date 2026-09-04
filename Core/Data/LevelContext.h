@@ -1,5 +1,4 @@
 #pragma once
-#include <cmath>
 #include <CryCore/BaseTypes.h>
 
 namespace JDKLevelMaps::Data

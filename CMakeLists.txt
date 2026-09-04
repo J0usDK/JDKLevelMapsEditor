@@ -35,6 +35,7 @@ add_sources("JDKLevelMapsPlugin_Core_Data_uber.cpp"
 		"Core/Data/RunResult.h"
 		"Core/Data/LevelContext.h"
 		"Core/Data/LevelContext.cpp"
+		"Core/Data/MapContext.h"
 )
 
 add_sources("JDKLevelMapsPlugin_Core_FileSystem_uber.cpp"
@@ -67,10 +68,26 @@ add_sources("JDKLevelMapsPlugin_Core_ImageExport_uber.cpp"
 
 add_sources("JDKLevelMapsPlugin_Core_MapWork_uber.cpp"
 	SOURCE_GROUP "Core\\\\MapWork"
-		"Core/MapWork/MapFileWriter.h"
-		"Core/MapWork/MapFileWriter.cpp"
-		"Core/MapWork/MapFileReader.h"
-		"Core/MapWork/MapFileReader.cpp"
+
+	SOURCE_GROUP "Core\\\\MapWork\\\\Write"
+		"Core/MapWork/Write/MapFileWriter.h"
+		"Core/MapWork/Write/MapFileWriter.cpp"
+		"Core/MapWork/Write/MapFileWriter_Prepare.cpp"
+		"Core/MapWork/Write/MapFileWriter_Bake.cpp"
+
+	SOURCE_GROUP "Core\\\\MapWork\\\\Read"
+		"Core/MapWork/Read/MapFileReader.h"
+		"Core/MapWork/Read/MapFileReader.cpp"
+		"Core/MapWork/Read/MapFileReader_Prepare.cpp"
+		"Core/MapWork/Read/MapFileReader_Read.cpp"
+
+	SOURCE_GROUP "Core\\\\MapWork\\\\Strategies"
+		"Core/MapWork/Strategies/DirectoryBitmaskStrategy.h"
+		"Core/MapWork/Strategies/DirectoryBitmaskStrategy.cpp"
+		"Core/MapWork/Strategies/DirectoryHybridStrategy.h"
+		"Core/MapWork/Strategies/DirectoryHybridStrategy.cpp"
+		"Core/MapWork/Strategies/IDirectoryFormatStrategy.h"
+		"Core/MapWork/Strategies/IDirectoryFormatStrategy.cpp"
 )
 
 add_sources("JDKLevelMapsPlugin_Core_Orchestration_uber.cpp"
@@ -123,6 +140,23 @@ add_sources("JDKLevelMapsPlugin_Utils_uber.cpp"
 		"Utils/ImageResizer.h"
 		"Utils/ImageView.h"
 		"Utils/Defines.h"
+		"Utils/VectorUtils.h"
+		"Utils/IOUtils.h"
+)
+
+add_sources("JDKLevelMapsPlugin_Includes_uber.cpp"
+	SOURCE_GROUP "Includes"
+
+	SOURCE_GROUP "Includes\\\\JDKMath"
+		"Includes/JDKMath/MathConfig.h"
+		"Includes/JDKMath/MathAssert.h"
+		"Includes/JDKMath/CpuFeatures.h"
+		"Includes/JDKMath/MathGeneral.h"
+		"Includes/JDKMath/BitMath.h"
+		"Includes/JDKMath/BitmaskRank.h"
+		"Includes/JDKMath/FlatRankTable.h"
+		"Includes/JDKMath/TwoLevelRankTable.h"
+		"Includes/JDKMath/UniversalRankTable.h"
 )
 
 end_sources()

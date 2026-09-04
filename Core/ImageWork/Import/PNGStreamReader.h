@@ -1,5 +1,5 @@
 #pragma once
-#include <cstdio>
+#include <CryCore/BaseTypes.h>
 
 namespace JDKLevelMaps::Utils::Common
 {

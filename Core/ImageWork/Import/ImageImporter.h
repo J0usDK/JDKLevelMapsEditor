@@ -1,6 +1,8 @@
 #pragma once
 #include <string>
 
+#include "PNGStreamReader.h"
+
 namespace JDKLevelMaps::Data
 {
 	struct SLevelContext;
@@ -37,9 +39,7 @@ namespace JDKLevelMaps::ImageWork
 	private:
 		Utils::Common::SProgressTask* m_pImageTask = nullptr;
 
-		
-		uint32 m_imageWidth = 0;
-		uint32 m_imageHeight = 0;
+		SImageSizes m_imageSizes;
 		std::string m_imagePath;
 
 		bool m_bReady = false;

@@ -1,6 +1,10 @@
 #pragma once
-#include <cstdio>
 #include <CryCore/BaseTypes.h>
+
+namespace JDKLevelMaps::Data
+{
+	struct SRunResult;
+}
 
 namespace JDKLevelMaps::ImageWork
 {
@@ -13,5 +17,5 @@ namespace JDKLevelMaps::ImageWork
 		[[nodiscard]] virtual bool OnProgress(uint32 processedLine) noexcept = 0;
 	};
 
-	[[nodiscard]] bool WritePNG(FILE* pFile, uint32 width, uint32 height, IPNGDataSource& dataSource);
+	[[nodiscard]] Data::SRunResult WritePNG(FILE* pFile, uint32 width, uint32 height, IPNGDataSource& dataSource);
 }

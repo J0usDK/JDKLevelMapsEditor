@@ -1,10 +1,7 @@
 #include "StdAfx.h"
 #include "PNGStreamReader.h"
 
-#include <string>
-
 #include <QtZlib/zlib.h>
-#include "CrySystem/File/ICryPak.h"
 
 #include "Core/Data/RunResult.h"
 #include "Core/FileSystem/LFSFacade.h"
@@ -171,6 +168,10 @@ namespace JDKLevelMaps::ImageWork
 	{
 		if (!pFile)
 			return { false, "File pointer is null" };
+
+		static constexpr uint64 kPNGDataOffset = 33;
+		if (FileSystem::LFSFacade::FSeek(pFile, kPNGDataOffset, SEEK_SET) != 0)
+			return { false, "Disk I/O Error: Cannot seek to PNG data chunks" };
 
 		SIDATDecompressor decompressor(pFile, imageSizes, outImageView, pTask);
 		if (!decompressor.Init())

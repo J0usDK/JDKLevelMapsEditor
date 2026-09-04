@@ -5,7 +5,6 @@
 #include <ILevelEditor.h>
 #include <Cry3DEngine/I3DEngine.h>
 
-#include "Shared/MapHeader.h"
 #include "Utils/Logger.h"
 
 namespace JDKLevelMaps::FileSystem

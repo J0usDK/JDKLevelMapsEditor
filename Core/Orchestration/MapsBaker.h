@@ -1,5 +1,4 @@
 #pragma once
-#include <vector>
 #include <CryCore/BaseTypes.h>
 
 namespace JDKLevelMaps
@@ -53,9 +52,6 @@ namespace JDKLevelMaps::Managers
 		CMapsBaker(CBakersRegistry& bakersRegistry, FileSystem::CPathResolver& pathResolver, const Settings::SBakerSettings& bakerSettings) noexcept;
 
 		[[nodiscard]] Data::SRunResult RunBake(EMapType mapType, Utils::Common::SProgress& progress);
-
-	private:
-		[[nodiscard]] Data::SRunResult BuildBakingData(const Bakers::IMapBaker* pBaker, const Data::SLevelContext& context, std::vector<uint8>& outData) noexcept;
 
 	private:
 		CBakersRegistry& m_bakersRegistry;

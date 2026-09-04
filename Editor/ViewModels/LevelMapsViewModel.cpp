@@ -6,9 +6,9 @@
 
 #include "Core/Data/RunResult.h"
 #include "Core/Data/LevelContext.h"
-#include "Core/BakersRegistry.h"
 #include "Core/Orchestration/MapsBaker.h"
 #include "Core/Orchestration/ImageLoader.h"
+#include "Core/BakersRegistry.h"
 #include "Core/Bakers/Vegetation/VegetationBaker.h"
 #include "Core/FileSystem/PathResolver.h"
 #include "Settings/BakerSettings.h"
@@ -57,7 +57,7 @@ namespace JDKLevelMaps::ViewModels
 		const bool bHasImage = imagePathOpt && gEnv->pCryPak->IsFileExist(imagePathOpt->c_str());
 		const bool bHasMap = mapPathOpt && gEnv->pCryPak->IsFileExist(mapPathOpt->c_str());
 
-		Q_EMIT previewAvailabilityChanged(bHasMap, bHasImage, bHasImage ? QString::fromStdString(imagePathOpt.value()) : QString());
+		Q_EMIT previewAvailabilityChanged(bHasMap, bHasImage);
 	}
 
 	bool CLevelMapsViewModel::IsOperationCancelled() const noexcept
@@ -87,7 +87,7 @@ namespace JDKLevelMaps::ViewModels
 		});
 	}
 
-	void CLevelMapsViewModel::LoadPreviewAsync()
+	void CLevelMapsViewModel::LoadPreviewFromMapAsync()
 	{
 		JoinThread();
 		m_progress.Reset();
@@ -115,18 +115,18 @@ namespace JDKLevelMaps::ViewModels
 		});
 	}
 
-	void CLevelMapsViewModel::LoadPreviewAsync(const QString& imagePath)
+	void CLevelMapsViewModel::LoadPreviewFromDiskAsync()
 	{
 		JoinThread();
 		m_progress.Reset();
 		const uint64 operationID = StartOperation(EOperationState::LoadingPreview);
 
-		m_operationThread = std::thread([this, operationID, path = imagePath]()
+		m_operationThread = std::thread([this, operationID]()
 		{
 			QImage img(0, 0, QImage::Format_RGB888);
 
 			ImageWork::SImageView imageView(0, 0, 0, 3, img.bits(), &Utils::Image::ResizeImage, &img);
-			Data::SRunResult result = m_pImageLoader->LoadPreviewFromMap(EMapType::VegetationDensity, m_progress, imageView);
+			Data::SRunResult result = m_pImageLoader->LoadPreviewFromDisk(EMapType::VegetationDensity, m_progress, imageView);
 
 			m_progress.bIsCompleted.store(true, std::memory_order_release);
 			QMetaObject::invokeMethod(this, [this, operationID, img, operationResult = std::move(result)]()

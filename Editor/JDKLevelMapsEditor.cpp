@@ -1,6 +1,7 @@
 #include "StdAfx.h"
 #include "JDKLevelMapsEditor.h"
 
+#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QSpinBox>
 #include <QCheckBox>
@@ -95,6 +96,7 @@ void CJDKLevelMapsEditor::SetupWidget(QWidget* pWidget)
 {
 	m_pMapPreview = new JDKLevelMaps::Components::CMapPreview(pWidget);
 	m_pGenerateButton = new JDKLevelMaps::Components::CGenerateButton(pWidget);
+	m_pFormatComboBox = new QComboBox(pWidget);
 	m_pCellSizeSpinBox = new QDoubleSpinBox(pWidget);
 	m_pTileSizeSpinBox = new QSpinBox(pWidget);
 	m_pSensitivitySpinBox = new QSpinBox(pWidget);
@@ -113,6 +115,12 @@ void CJDKLevelMapsEditor::SetupWidget(QWidget* pWidget)
 	m_pGenerateButton->SetText(JDKLevelMaps::Components::EButtonState::Start, tr("Generate"));
 	m_pGenerateButton->SetText(JDKLevelMaps::Components::EButtonState::Stop, tr("Stop"));
 	m_pGenerateButton->SetText(JDKLevelMaps::Components::EButtonState::Cancelling, tr("Cancelling..."));
+
+	m_pFormatComboBox->addItem("Bitmask", static_cast<int>(JDKLevelMaps::Settings::EDirectoryFormat::Bitmask));
+	m_pFormatComboBox->addItem("Hybrid", static_cast<int>(JDKLevelMaps::Settings::EDirectoryFormat::Hybrid));
+	
+	int formatIndex = m_pFormatComboBox->findData(static_cast<int>(currentSettings.directoryFormat));
+	m_pFormatComboBox->setCurrentIndex(formatIndex);
 
 	m_pCellSizeSpinBox->setDecimals(2);
 	m_pCellSizeSpinBox->setSingleStep(0.5);
@@ -140,6 +148,7 @@ void CJDKLevelMapsEditor::SetupWidget(QWidget* pWidget)
 		"Warning: Exporting large maps may take a long time and consume a lot of RAM."));
 
 	QFormLayout* pForm = new QFormLayout();
+	pForm->addRow(tr("Directory Format"), m_pFormatComboBox);
 	pForm->addRow(tr("Cell Size"), m_pCellSizeSpinBox);
 	pForm->addRow(tr("Tile Size"), m_pTileSizeSpinBox);
 	pForm->addRow(tr("Sensitivity"), m_pSensitivitySpinBox);
@@ -191,6 +200,10 @@ void CJDKLevelMapsEditor::SetupConnections()
 		SaveSettings();
 	});
 	
+	connect(m_pFormatComboBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [&](int index) {
+		settings.directoryFormat = static_cast<JDKLevelMaps::Settings::EDirectoryFormat>(m_pFormatComboBox->itemData(index).toInt());
+		SaveSettings();
+	});
 
 	connect(m_pTileSizeSpinBox, qOverload<int>(&QSpinBox::valueChanged), this, [&](int value) {
 		settings.tileSize = static_cast<uint32>(value);
@@ -249,7 +262,7 @@ void CJDKLevelMapsEditor::OnLoadPreviewButtonClicked(bool bStart)
 	if (bStart)
 	{
 		m_pProgressBar->setValue(0);
-		m_pViewModel->LoadPreviewAsync();
+		m_pViewModel->LoadPreviewFromMapAsync();
 	}
 	else
 		m_pViewModel->StopLoadingPreview();
@@ -278,7 +291,7 @@ void CJDKLevelMapsEditor::OnBakeFinished(bool bSuccess, QString message)
 	}
 }
 
-void CJDKLevelMapsEditor::OnPreviewAvailabilityChanged(bool bHasMap, bool bHasImage, QString imagePath)
+void CJDKLevelMapsEditor::OnPreviewAvailabilityChanged(bool bHasMap, bool bHasImage)
 {
 	if (!m_bLevelLoaded)
 	{
@@ -289,7 +302,7 @@ void CJDKLevelMapsEditor::OnPreviewAvailabilityChanged(bool bHasMap, bool bHasIm
 	if (bHasImage)
 	{
 		m_pMapPreview->ResetPixmap(tr("Loading preview image..."));
-		m_pViewModel->LoadPreviewAsync(imagePath);
+		m_pViewModel->LoadPreviewFromDiskAsync();
 		return;
 	}
 
@@ -313,7 +326,7 @@ void CJDKLevelMapsEditor::OnPreviewLoadFailed(QString message)
 	else
 		JDK_LOG("Preview loading was cancelled by user");
 
-	m_pViewModel->CheckPreviewAvailability();
+	m_pMapPreview->ResetPixmap(tr("No preview generated yet"));
 }
 
 void CJDKLevelMapsEditor::OnCellSizeChanged(double value)
@@ -331,6 +344,7 @@ void CJDKLevelMapsEditor::SaveSettings()
 
 	SetProjectProperty("JDKLevelMaps/CellSize", settings.cellSize);
 	SetProjectProperty("JDKLevelMaps/TileSize", settings.tileSize);
+	SetProjectProperty("JDKLevelMaps/DirectoryFormat", static_cast<uint8>(settings.directoryFormat));
 	SetProjectProperty("JDKLevelMaps/GenerateDebugImage", settings.bGenerateDebugImage);
 	SaveVegetationSettings(settings.vegSettings);
 }
@@ -355,6 +369,9 @@ void CJDKLevelMapsEditor::LoadSettings()
 
 	const uint32 loadedTileSize = JDKLevelMaps::Utils::ConvertUtils::QVariantToUint32(GetProjectProperty("JDKLevelMaps/TileSize"), settings.tileSize);
 	settings.tileSize = std::clamp(loadedTileSize, static_cast<uint32>(1), m_pViewModel->CalculateMaxTileSize(settings.cellSize));
+
+	const uint8 loadedFormat = JDKLevelMaps::Utils::ConvertUtils::QVariantToUint8(GetProjectProperty("JDKLevelMaps/DirectoryFormat"), static_cast<uint8>(settings.directoryFormat));
+	settings.directoryFormat = static_cast<JDKLevelMaps::Settings::EDirectoryFormat>(std::clamp<uint8>(loadedFormat, 0, 1));
 
 	settings.bGenerateDebugImage = JDKLevelMaps::Utils::ConvertUtils::QVariantToBool(GetProjectProperty("JDKLevelMaps/GenerateDebugImage"), settings.bGenerateDebugImage);
 

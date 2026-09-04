@@ -26,11 +26,11 @@ namespace JDKLevelMaps::Bakers
 		[[nodiscard]] const char* GetID() const noexcept override;
 		[[nodiscard]] EMapType GetMapType() const noexcept override;
 		[[nodiscard]] uint32 GetChannelCount() const noexcept override;
+		[[nodiscard]] uint8 GetActiveLayersMask() const noexcept override;
 
 		[[nodiscard]] std::vector<uint8> Bake(const Data::SLevelContext& context) const override;
 
-		[[nodiscard]] SDebugColor GetDebugColor(const uint8* pCellData) const noexcept override;
-
+		[[nodiscard]] SDebugColor GetDebugColor(uint8 channelsMask, const uint8* pCellData) const noexcept override;
 		[[nodiscard]] DebugColorMapperPtr GetDebugColorMapper() const noexcept override;
 
 	private:

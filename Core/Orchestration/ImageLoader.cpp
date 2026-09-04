@@ -1,11 +1,9 @@
 #include "StdAfx.h"
 #include "ImageLoader.h"
 
-#include "Core/BakersRegistry.h"
 #include "Core/Data/RunResult.h"
-#include "Core/Bakers/IMapBaker.h"
-#include "Core/FileSystem/PathResolver.h"
-#include "Core/MapWork/MapFileReader.h"
+#include "Core/BakersRegistry.h"
+#include "Core/MapWork/Read/MapFileReader.h"
 #include "Core/ImageWork/Import/ImageImporter.h"
 #include "Utils/Progress.h"
 
@@ -22,10 +20,8 @@ namespace JDKLevelMaps::Managers
 
 		MapWork::CMapFileReader mapFileReader;
 		Utils::Common::CProgressor progressor(progress);
-		Data::SRunResult result;
 
-		result = mapFileReader.Prepare(*pBaker, m_pathResolver, &progressor);
-		if (!result.bSuccess)
+		if (auto result = mapFileReader.Prepare(*pBaker, m_pathResolver, &progressor); !result.bSuccess)
 			return result;
 
 		return mapFileReader.LoadPreviewFromMap(outImage);
@@ -39,10 +35,8 @@ namespace JDKLevelMaps::Managers
 
 		ImageWork::CImageImporter imageReader;
 		Utils::Common::CProgressor progressor(progress);
-		Data::SRunResult result;
 
-		result = imageReader.Prepare(*pBaker, m_pathResolver, &progressor);
-		if (!result.bSuccess)
+		if (auto result = imageReader.Prepare(*pBaker, m_pathResolver, &progressor); !result.bSuccess)
 			return result;
 
 		return imageReader.ImportImage(outImage);

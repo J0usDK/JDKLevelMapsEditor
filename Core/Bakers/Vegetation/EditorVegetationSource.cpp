@@ -6,6 +6,7 @@
 #include <Vegetation/VegetationObject.h>
 
 #include "VegetationClassifier.h"
+#include "Utils/VectorUtils.h"
 
 namespace JDKLevelMaps::JDKEditorSource
 {
@@ -23,10 +24,14 @@ namespace JDKLevelMaps::JDKEditorSource
 
 		std::vector<CVegetationInstance*> instances;
 		pVegetationMap->GetObjectInstances(x1, y1, x2, y2, instances);
-		result.reserve(instances.size());
+
+		if (!Utils::Common::TryReserve(result, instances.size()))
+			return result;
 
 		std::unordered_map<CVegetationObject*, MapLayers::EVegetationLayers> objCache;
-		objCache.reserve(pVegetationMap->GetObjectCount());
+
+		if (!Utils::Common::TryReserve(objCache, pVegetationMap->GetObjectCount()))
+			return result;
 
 		for (auto pInstance : instances)
 		{

@@ -1,13 +1,14 @@
 #pragma once
 #include <memory>
 #include <thread>
-#include <QString>
-#include <QImage>
 #include <QObject>
 
 #include <CryCore/BaseTypes.h>
 
 #include "Utils/Progress.h"
+
+class QString;
+class QImage;
 
 namespace JDKLevelMaps
 {
@@ -63,8 +64,8 @@ namespace JDKLevelMaps::ViewModels
 	public slots:
 		void StartBaking();
 		void StopBaking() noexcept;
-		void LoadPreviewAsync();
-		void LoadPreviewAsync(const QString& imagePath);
+		void LoadPreviewFromMapAsync();
+		void LoadPreviewFromDiskAsync();
 		void StopLoadingPreview() noexcept;
 	
 	signals:
@@ -73,7 +74,7 @@ namespace JDKLevelMaps::ViewModels
 		void bakeFinished(bool bSuccess, QString message);
 		void previewLoaded(QImage image);
 		void previewLoadFailed(QString message);
-		void previewAvailabilityChanged(bool bHasMap, bool bHasImage, QString imagePath);
+		void previewAvailabilityChanged(bool bHasMap, bool bHasImage);
 
 	private:
 		[[nodiscard]] uint64 StartOperation(EOperationState state) noexcept;
@@ -87,7 +88,6 @@ namespace JDKLevelMaps::ViewModels
 		// All methods must be called from the main/UI thread.
 		struct SOperationState
 		{
-		public:
 			[[nodiscard]] EOperationState Get() const noexcept { return eCurrentState; }
 
 			[[nodiscard]] uint64 Start(EOperationState state) noexcept

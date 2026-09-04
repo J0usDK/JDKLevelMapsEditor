@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <optional>
+#include <CryString/CryString.h>
 
 namespace JDKLevelMaps::FileSystem
 {

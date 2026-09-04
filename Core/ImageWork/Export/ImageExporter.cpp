@@ -2,7 +2,6 @@
 #include "ImageExporter.h"
 
 #include <utility>
-#include <CrySystem/File/ICryPak.h>
 
 #include "Core/Data/LevelContext.h"
 #include "Core/Data/RunResult.h"
@@ -20,12 +19,12 @@ namespace JDKLevelMaps::ImageWork
 	{
 	public:
 		CImageDataSource() = delete;
-		explicit CImageDataSource(const std::vector<uint8>& data, uint32 width, uint32 channels, Bakers::DebugColorMapperPtr mapper, Utils::Common::SProgressTask* pTask) noexcept
-			: m_data(data), m_width(width), m_channels(channels), m_colorMapper(mapper), m_pTask(pTask) { }
+		explicit CImageDataSource(const std::vector<uint8>& data, uint32 width, uint32 channelsCount, uint8 channelsMask, Bakers::DebugColorMapperPtr mapper, Utils::Common::SProgressTask* pTask) noexcept
+			: m_data(data), m_width(width), m_channelsCount(channelsCount), m_channelsMask(channelsMask), m_colorMapper(mapper), m_pTask(pTask) { }
 
 		bool FetchRowRGB(uint32 y, uint8* JDK_RESTRICT pOutRowRgb) noexcept override
 		{
-			const size_t rowOffset = static_cast<size_t>(y) * m_width * m_channels;
+			const size_t rowOffset = static_cast<size_t>(y) * m_width * m_channelsCount;
 			const uint8* pRowData = m_data.data() + rowOffset;
 
 			const uint8* pPixel = pRowData;
@@ -33,13 +32,13 @@ namespace JDKLevelMaps::ImageWork
 
 			for (uint32 x = 0; x < m_width; ++x)
 			{
-				const Bakers::SDebugColor color = m_colorMapper(pPixel);
+				const Bakers::SDebugColor color = m_colorMapper(m_channelsMask, pPixel);
 
 				pOut[0] = color.r;
 				pOut[1] = color.g;
 				pOut[2] = color.b;
 
-				pPixel += m_channels;
+				pPixel += m_channelsCount;
 				pOut += 3;
 			}
 			return true;
@@ -54,8 +53,11 @@ namespace JDKLevelMaps::ImageWork
 
 	private:
 		const std::vector<uint8>& m_data;
+
 		const uint32 m_width;
-		const uint32 m_channels;
+		const uint32 m_channelsCount;
+		const uint8 m_channelsMask;
+
 		const Bakers::DebugColorMapperPtr m_colorMapper;
 		Utils::Common::SProgressTask* m_pTask;
 	};
@@ -63,7 +65,7 @@ namespace JDKLevelMaps::ImageWork
 	Data::SRunResult CImageExporter::Prepare(const Bakers::IMapBaker& baker, const Data::SLevelContext& context, FileSystem::CPathResolver& pathResolver, Utils::Common::CProgressor* pProgressor)
 	{
 		if (auto imagePath = pathResolver.GetImagePath(baker.GetID()))
-			m_imagePath = imagePath.value();
+			m_imagePath = std::move(*imagePath);
 		else
 			return { false, "Disk I/O Error: Cannot get image's path" };
 
@@ -79,14 +81,14 @@ namespace JDKLevelMaps::ImageWork
 		if (!std::exchange(m_bReady, false))
 			return { false, "Exporter is not ready" };
 
-		Utils::FileSystem::ScopedCryFile file(FileSystem::LFSFacade::FOpen(m_imagePath.c_str(), "wb"));
+		Utils::FileSystem::ScopedCryFile file(FileSystem::LFSFacade::FOpen(m_imagePath.c_str(), "wb"), m_imagePath.c_str());
 		if (!file)
-			return { false, "Can't open debug image file for writing" };
+			return { false, "Disk I/O Error: Cannot open debug image file for writing" };
 
-		CImageDataSource dataSource(data, context.gridWidth, baker.GetChannelCount(), baker.GetDebugColorMapper(), m_pImageTask);
+		CImageDataSource dataSource(data, context.gridWidth, baker.GetChannelCount(), baker.GetActiveLayersMask(), baker.GetDebugColorMapper(), m_pImageTask);
 
-		if (!ImageWork::WritePNG(file, context.gridWidth, context.gridHeight, dataSource))
-			return { false, "Failed to stream debug image to PNG" };
+		if (auto result = ImageWork::WritePNG(file, context.gridWidth, context.gridHeight, dataSource); !result.bSuccess)
+			return result;
 
 		file.close(true);
 		return { true, "" };
