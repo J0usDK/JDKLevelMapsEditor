@@ -25,8 +25,6 @@ namespace JDKLevelMaps::ViewModels
 		m_pMapsBaker = std::make_unique<Managers::CMapsBaker>(*m_pBakersRegistry.get(), *m_pPathResolver.get(), *m_pBakerSettings.get());
 		m_pImageLoader = std::make_unique<Managers::CImageLoader>(*m_pBakersRegistry.get(), *m_pPathResolver.get());
 
-		m_pBakersRegistry->RegisterBaker(std::make_unique<Bakers::CVegetationBaker>(m_pBakerSettings->vegSettings));
-
 		m_pProgressTimer = new QTimer(this);
 		m_pProgressTimer->setInterval(33);
 		connect(m_pProgressTimer, &QTimer::timeout, this, [this]() { Q_EMIT progressUpdated(m_progress.progress.load(std::memory_order_relaxed)); });
@@ -43,12 +41,11 @@ namespace JDKLevelMaps::ViewModels
 	void CLevelMapsViewModel::RecomputePaths()
 	{
 		m_pPathResolver->RecomputePath();
-		CheckPreviewAvailability();
 	}
 
-	void CLevelMapsViewModel::CheckPreviewAvailability()
+	void CLevelMapsViewModel::CheckPreviewAvailability(EMapType mapType)
 	{
-		auto pBaker = m_pBakersRegistry->GetBaker(EMapType::VegetationDensity);
+		auto pBaker = m_pBakersRegistry->GetBaker(mapType);
 		if (!pBaker) return;
 
 		auto imagePathOpt = m_pPathResolver->GetImagePath(pBaker->GetID());
@@ -60,46 +57,51 @@ namespace JDKLevelMaps::ViewModels
 		Q_EMIT previewAvailabilityChanged(bHasMap, bHasImage);
 	}
 
+	void CLevelMapsViewModel::RegisterBaker(std::unique_ptr<Bakers::IMapBaker> pBaker)
+	{
+		m_pBakersRegistry->RegisterBaker(std::move(pBaker));
+	}
+
 	bool CLevelMapsViewModel::IsOperationCancelled() const noexcept
 	{
 		return m_progress.bIsCancelled.load(std::memory_order_relaxed);
 	}
 
-	void CLevelMapsViewModel::StartBaking()
+	void CLevelMapsViewModel::StartBaking(EMapType mapType)
 	{
 		JoinThread();
 		m_progress.Reset();
 		const uint64 operationID = StartOperation(EOperationState::BakingMap);
 
 		m_pProgressTimer->start();
-		m_operationThread = std::thread([this, operationID]()
+		m_operationThread = std::thread([this, mapType, operationID]()
 		{
-			Data::SRunResult result = m_pMapsBaker->RunBake(EMapType::VegetationDensity, m_progress);
+			Data::SRunResult result = m_pMapsBaker->RunBake(mapType, m_progress);
 
-			QMetaObject::invokeMethod(this, [this, operationID, operationResult = std::move(result)]()
+			QMetaObject::invokeMethod(this, [this, mapType, operationID, operationResult = std::move(result)]()
 			{
 				StopProgressTimer();
 				Q_EMIT progressUpdated(100);
 				Q_EMIT bakeFinished(operationResult.bSuccess, QString::fromStdString(operationResult.message));
 				if (UpdateOperation(operationID, EOperationState::Idle) != 0)
-					CheckPreviewAvailability();
+					CheckPreviewAvailability(mapType);
 			});
 		});
 	}
 
-	void CLevelMapsViewModel::LoadPreviewFromMapAsync()
+	void CLevelMapsViewModel::LoadPreviewFromMapAsync(EMapType mapType)
 	{
 		JoinThread();
 		m_progress.Reset();
 		const uint64 operationID = StartOperation(EOperationState::LoadingPreview);
 
 		m_pProgressTimer->start();
-		m_operationThread = std::thread([this, operationID]()
+		m_operationThread = std::thread([this, mapType, operationID]()
 		{
 			QImage img(0, 0, QImage::Format_RGB888);
 
 			ImageWork::SImageView imageView(0, 0, 0, 3, img.bits(), & Utils::Image::ResizeImage, &img);
-			Data::SRunResult result = m_pImageLoader->LoadPreviewFromMap(EMapType::VegetationDensity, m_progress, imageView);
+			Data::SRunResult result = m_pImageLoader->LoadPreviewFromMap(mapType, m_progress, imageView);
 
 			QMetaObject::invokeMethod(this, [this, operationID, img, operationResult = std::move(result)]()
 			{
@@ -115,18 +117,18 @@ namespace JDKLevelMaps::ViewModels
 		});
 	}
 
-	void CLevelMapsViewModel::LoadPreviewFromDiskAsync()
+	void CLevelMapsViewModel::LoadPreviewFromDiskAsync(EMapType mapType)
 	{
 		JoinThread();
 		m_progress.Reset();
 		const uint64 operationID = StartOperation(EOperationState::LoadingPreview);
 
-		m_operationThread = std::thread([this, operationID]()
+		m_operationThread = std::thread([this, mapType, operationID]()
 		{
 			QImage img(0, 0, QImage::Format_RGB888);
 
 			ImageWork::SImageView imageView(0, 0, 0, 3, img.bits(), &Utils::Image::ResizeImage, &img);
-			Data::SRunResult result = m_pImageLoader->LoadPreviewFromDisk(EMapType::VegetationDensity, m_progress, imageView);
+			Data::SRunResult result = m_pImageLoader->LoadPreviewFromDisk(mapType, m_progress, imageView);
 
 			m_progress.bIsCompleted.store(true, std::memory_order_release);
 			QMetaObject::invokeMethod(this, [this, operationID, img, operationResult = std::move(result)]()

@@ -100,8 +100,14 @@ add_sources("JDKLevelMapsPlugin_Core_Orchestration_uber.cpp"
 
 add_sources("JDKLevelMapsPlugin_Editor_uber.cpp"
 	SOURCE_GROUP "Editor"
-		"Editor/JDKLevelMapsEditor.h"
-		"Editor/JDKLevelMapsEditor.cpp"
+)
+
+add_sources("JDKLevelMapsPlugin_Editor_Views_uber.cpp"
+	SOURCE_GROUP "Editor\\\\Views"
+		"Editor/Views/JDKLevelMapsEditor.h"
+		"Editor/Views/JDKLevelMapsEditor.cpp"
+		"Editor/Views/VegetationEditor.h"
+		"Editor/Views/VegetationEditor.cpp"
 )
 
 add_sources("JDKLevelMapsPlugin_Editor_ViewModels_uber.cpp"
@@ -122,6 +128,7 @@ add_sources("JDKLevelMapsPlugin_Settings_uber.cpp"
 	SOURCE_GROUP "Settings"
 		"Settings/BakerSettings.h"
 		"Settings/VegetationBakerSettings.h"
+		"Settings/ISettingsManager.h"
 )
 
 add_sources("JDKLevelMapsPlugin_Shared_uber.cpp"

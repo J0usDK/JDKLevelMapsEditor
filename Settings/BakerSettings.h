@@ -16,7 +16,5 @@ namespace JDKLevelMaps::Settings
 
 		EDirectoryFormat directoryFormat = EDirectoryFormat::Bitmask;
 		bool bGenerateDebugImage = false;
-
-		SVegetationBakerSettings vegSettings;
 	};
 }

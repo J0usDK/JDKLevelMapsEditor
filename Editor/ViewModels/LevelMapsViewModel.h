@@ -9,10 +9,16 @@
 
 class QString;
 class QImage;
+class QTimer;
 
 namespace JDKLevelMaps
 {
 	enum class EMapType : uint8;
+}
+
+namespace JDKLevelMaps::Bakers
+{
+	class IMapBaker;
 }
 
 namespace JDKLevelMaps::Settings
@@ -51,7 +57,8 @@ namespace JDKLevelMaps::ViewModels
 		~CLevelMapsViewModel() noexcept;
 
 		void RecomputePaths();
-		void CheckPreviewAvailability();
+		void CheckPreviewAvailability(EMapType mapType);
+		void RegisterBaker(std::unique_ptr<Bakers::IMapBaker> pBaker);
 
 		[[nodiscard]] EOperationState GetCurrentOperationState() const noexcept;
 		[[nodiscard]] bool IsOperationCancelled() const noexcept;
@@ -62,10 +69,10 @@ namespace JDKLevelMaps::ViewModels
 		[[nodiscard]] uint32 CalculateMaxTileSize(float cellSize) const noexcept;
 
 	public slots:
-		void StartBaking();
+		void StartBaking(EMapType mapType);
 		void StopBaking() noexcept;
-		void LoadPreviewFromMapAsync();
-		void LoadPreviewFromDiskAsync();
+		void LoadPreviewFromMapAsync(EMapType mapType);
+		void LoadPreviewFromDiskAsync(EMapType mapType);
 		void StopLoadingPreview() noexcept;
 	
 	signals:
