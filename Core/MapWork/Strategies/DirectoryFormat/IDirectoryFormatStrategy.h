@@ -23,6 +23,12 @@ namespace JDKLevelMaps::Data
 		uint64 offset = 0;
 		uint64 byteSize = 0;
 	};
+
+	struct SDirectorySection
+	{
+		const void* pData = nullptr;
+		size_t bytes = 0;
+	};
 }
 
 namespace JDKLevelMaps::MapWork::Strategies
@@ -32,11 +38,10 @@ namespace JDKLevelMaps::MapWork::Strategies
 	public:
 		virtual ~IDirectoryFormatStrategy() = default;
 
-		virtual Data::SRunResult WriteDirectory(FILE* pFile, const Data::SMapWriteContext& context, const void* pOffsets) = 0;
-		virtual Data::SRunResult ReadDirectory(FILE* pFile, const Data::SMapReadContext& context) = 0;
+		[[nodiscard]] virtual Data::SRunResult ParseDirectory(const std::vector<uint8>& directoryData, const Data::SMapReadContext& context) = 0;
 
-		virtual Data::SDirectoryInfo GetDirectoryInfo() const noexcept = 0;
-		virtual std::optional<Data::STileNode> GetTileNode(uint64 tileIndex) const noexcept = 0;
+		[[nodiscard]] virtual Data::SDirectoryInfo GetDirectoryInfo() const noexcept = 0;
+		[[nodiscard]] virtual std::optional<Data::STileNode> GetTileNode(uint64 tileIndex) const noexcept = 0;
 
 	protected:
 		[[nodiscard]] Data::SRunResult BuildRankTable() noexcept;

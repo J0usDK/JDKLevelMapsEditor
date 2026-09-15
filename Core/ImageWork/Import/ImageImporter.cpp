@@ -26,7 +26,7 @@ namespace JDKLevelMaps::ImageWork
 			return result;
 
 		if (pProgressor)
-			m_pImageTask = pProgressor->RegisterProgressTask(m_imageSizes.height, 1);
+			m_pImageTask = pProgressor->RegisterProgressTask(m_imageSizes.height);
 
 		m_bReady = true;
 		return { true, "" };

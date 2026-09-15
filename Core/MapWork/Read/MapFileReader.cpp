@@ -23,14 +23,13 @@ namespace JDKLevelMaps::MapWork
 		if (auto result = ReadMapHeader(file); !result.bSuccess)
 			return result;
 
+		if (auto result = InitCompressStrategy(); !result.bSuccess)
+			return result;
+
 		if (auto result = InitFormatStrategy(); !result.bSuccess)
 			return result;
 
-		if (pProgressor)
-		{
-			const uint64 totalTiles = static_cast<uint64>(m_readContext.header.tileCountX) * m_readContext.header.tileCountY;
-			m_readContext.pReadTask = pProgressor->RegisterProgressTask(totalTiles, 1);
-		}
+		InitProgressTasks(pProgressor);
 
 		m_bReady = true;
 		return { true, "" };
@@ -49,6 +48,6 @@ namespace JDKLevelMaps::MapWork
 		if (!outImage.IsValid())
 			return { false, "Out of Memory: Failed to allocate QImage" };
 
-		return ReadTiles(file, outImage);
+		return ReadMap(file, outImage);
 	}
 }

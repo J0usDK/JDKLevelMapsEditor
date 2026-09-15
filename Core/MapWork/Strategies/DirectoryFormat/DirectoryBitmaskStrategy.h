@@ -6,8 +6,7 @@ namespace JDKLevelMaps::MapWork::Strategies
 	class CDirectoryBitmaskStrategy final : public IDirectoryFormatStrategy
 	{
 	public:
-		Data::SRunResult WriteDirectory(FILE* pFile, const Data::SMapWriteContext& context, const void*) override;
-		Data::SRunResult ReadDirectory(FILE* pFile, const Data::SMapReadContext& context) override;
+		[[nodiscard]] Data::SRunResult ParseDirectory(const std::vector<uint8>& directoryData, const Data::SMapReadContext& context) override;
 
 		Data::SDirectoryInfo GetDirectoryInfo() const noexcept override;
 		std::optional<Data::STileNode> GetTileNode(uint64 tileIndex) const noexcept override;

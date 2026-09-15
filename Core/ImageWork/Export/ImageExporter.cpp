@@ -70,7 +70,7 @@ namespace JDKLevelMaps::ImageWork
 			return { false, "Disk I/O Error: Cannot get image's path" };
 
 		if (pProgressor)
-			m_pImageTask = pProgressor->RegisterProgressTask(context.gridHeight, 1);
+			m_pImageTask = pProgressor->RegisterProgressTask(context.gridHeight);
 
 		m_bReady = true;
 		return { true, "" };

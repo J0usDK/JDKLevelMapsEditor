@@ -31,6 +31,7 @@ namespace JDKLevelMaps::Views
 		LoadSettings();
 		SetupWidget(m_pRootWidget);
 		SetupConnections();
+		UpdateFormatComboBoxState();
 		SetContent(m_pRootWidget);
 
 		UpdateLevelState(false);
@@ -132,7 +133,23 @@ namespace JDKLevelMaps::Views
 		m_pGenerateButton->SetText(Components::EButtonState::Stop, tr("Stop"));
 		m_pGenerateButton->SetText(Components::EButtonState::Cancelling, tr("Cancelling..."));
 
+		m_pCompressionComboBox = new QComboBox(pWidget);
+		m_pCompressionComboBox->addItem("None", static_cast<int>(Settings::ECompression::None));
+		m_pCompressionComboBox->addItem("Auto", static_cast<int>(Settings::ECompression::Auto));
+		m_pCompressionComboBox->addItem("Zlib Metadata", static_cast<int>(Settings::ECompression::ZlibMetadata));
+		m_pCompressionComboBox->addItem("Zstd Metadata", static_cast<int>(Settings::ECompression::ZstdMetadata));
+		m_pCompressionComboBox->addItem("LZ4 Metadata", static_cast<int>(Settings::ECompression::LZ4Metadata));
+		m_pCompressionComboBox->addItem("Zlib Data", static_cast<int>(Settings::ECompression::ZlibData));
+		m_pCompressionComboBox->addItem("Zstd Data", static_cast<int>(Settings::ECompression::ZstdData));
+		m_pCompressionComboBox->addItem("LZ4 Data", static_cast<int>(Settings::ECompression::LZ4Data));
+		m_pCompressionComboBox->addItem("Zlib Both", static_cast<int>(Settings::ECompression::ZlibBoth));
+		m_pCompressionComboBox->addItem("Zstd Both", static_cast<int>(Settings::ECompression::ZstdBoth));
+		m_pCompressionComboBox->addItem("LZ4 Both", static_cast<int>(Settings::ECompression::LZ4Both));
+		int compressionAlg = m_pCompressionComboBox->findData(static_cast<int>(currentSettings.compression));
+		m_pCompressionComboBox->setCurrentIndex(compressionAlg);
+
 		m_pFormatComboBox = new QComboBox(pWidget);
+		m_pFormatComboBox->addItem("Auto", static_cast<int>(Settings::EDirectoryFormat::Auto));
 		m_pFormatComboBox->addItem("Bitmask", static_cast<int>(Settings::EDirectoryFormat::Bitmask));
 		m_pFormatComboBox->addItem("Hybrid", static_cast<int>(Settings::EDirectoryFormat::Hybrid));
 		int formatIndex = m_pFormatComboBox->findData(static_cast<int>(currentSettings.directoryFormat));
@@ -157,6 +174,7 @@ namespace JDKLevelMaps::Views
 		m_pProgressBar = new QProgressBar(pWidget);
 
 		QFormLayout* pCommonForm = new QFormLayout();
+		pCommonForm->addRow(tr("Compression"), m_pCompressionComboBox);
 		pCommonForm->addRow(tr("Directory Format"), m_pFormatComboBox);
 		pCommonForm->addRow(tr("Cell Size"), m_pCellSizeSpinBox);
 		pCommonForm->addRow(tr("Tile Size"), m_pTileSizeSpinBox);
@@ -184,7 +202,13 @@ namespace JDKLevelMaps::Views
 
 		connect(m_pTabBar, &QTabBar::currentChanged, this, [&]() {
 			m_pViewModel->CheckPreviewAvailability(GetActiveMapType());
-			});
+		});
+
+		connect(m_pCompressionComboBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [&](int index) {
+			settings.compression = static_cast<Settings::ECompression>(m_pCompressionComboBox->itemData(index).toInt());
+			UpdateFormatComboBoxState();
+			SaveSettings();
+		});
 
 		connect(m_pGenerateButton, &Components::CGenerateButton::buttonClicked, this, &CJDKLevelMapsEditor::OnGenerateButtonClicked);
 
@@ -204,21 +228,33 @@ namespace JDKLevelMaps::Views
 
 		connect(m_pCellSizeSpinBox, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &CJDKLevelMapsEditor::OnCellSizeChanged);
 
-		connect(m_pGenerateImageCheckBox, &QCheckBox::toggled, this, [&](bool bChecked)
-			{
-				settings.bGenerateDebugImage = bChecked;
-				SaveSettings();
-			});
+		connect(m_pGenerateImageCheckBox, &QCheckBox::toggled, this, [&](bool bChecked) {
+			settings.bGenerateDebugImage = bChecked;
+			SaveSettings();
+		});
 
 		connect(m_pFormatComboBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [&](int index) {
 			settings.directoryFormat = static_cast<Settings::EDirectoryFormat>(m_pFormatComboBox->itemData(index).toInt());
 			SaveSettings();
-			});
+		});
 
 		connect(m_pTileSizeSpinBox, qOverload<int>(&QSpinBox::valueChanged), this, [&](int value) {
 			settings.tileSize = static_cast<uint32>(value);
 			SaveSettings();
-			});
+		});
+	}
+
+	void CJDKLevelMapsEditor::UpdateFormatComboBoxState()
+	{
+		const auto& settings = m_pViewModel->GetSettings();
+
+		if (settings.compression == Settings::ECompression::None)
+			m_pFormatComboBox->setEnabled(true);
+		else
+		{
+			m_pFormatComboBox->setEnabled(false);
+			m_pFormatComboBox->setCurrentIndex(m_pFormatComboBox->findData(static_cast<int>(Settings::EDirectoryFormat::Auto)));
+		}
 	}
 
 	void CJDKLevelMapsEditor::OnGenerateButtonClicked(Components::EButtonState clickedState)
@@ -319,6 +355,7 @@ namespace JDKLevelMaps::Views
 
 		SetProjectProperty("JDKLevelMaps/CellSize", settings.cellSize);
 		SetProjectProperty("JDKLevelMaps/TileSize", settings.tileSize);
+		SetProjectProperty("JDKLevelMaps/Compression", static_cast<uint8>(settings.compression));
 		SetProjectProperty("JDKLevelMaps/DirectoryFormat", static_cast<uint8>(settings.directoryFormat));
 		SetProjectProperty("JDKLevelMaps/GenerateDebugImage", settings.bGenerateDebugImage);
 	}
@@ -332,6 +369,9 @@ namespace JDKLevelMaps::Views
 
 		const uint32 loadedTileSize = Utils::ConvertUtils::QVariantToUint32(GetProjectProperty("JDKLevelMaps/TileSize"), settings.tileSize);
 		settings.tileSize = std::clamp(loadedTileSize, static_cast<uint32>(1), m_pViewModel->CalculateMaxTileSize(settings.cellSize));
+
+		const uint8 compression = Utils::ConvertUtils::QVariantToUint8(GetProjectProperty("JDKLevelMaps/Compression"), static_cast<uint8>(settings.compression));
+		settings.compression = static_cast<Settings::ECompression>(compression);
 
 		const uint8 loadedFormat = Utils::ConvertUtils::QVariantToUint8(GetProjectProperty("JDKLevelMaps/DirectoryFormat"), static_cast<uint8>(settings.directoryFormat));
 		settings.directoryFormat = static_cast<Settings::EDirectoryFormat>(std::clamp<uint8>(loadedFormat, 0, 1));

@@ -20,178 +20,140 @@ namespace
 
 namespace JDKLevelMaps::MapWork
 {
-	Data::SRunResult CMapFileWriter::BuildBakeContext(const Bakers::IMapBaker& baker, FileSystem::CPathResolver& pathResolver, const Data::SLevelContext& context, BakeData bakingData, bool bUseHybrid)
+	Data::SRunResult CMapFileWriter::BuildWriteContext(const SBakeContext& context, FileSystem::CPathResolver& pathResolver)
 	{
-		m_bakeContext.channelsCount = baker.GetChannelCount();
-		m_bakeContext.layersMask = baker.GetActiveLayersMask();
+		m_writeContext.channelsCount = context.baker.GetChannelCount();
+		m_writeContext.layersMask = context.baker.GetActiveLayersMask();
 
 		if (auto result = ValidateBakeContext(context); !result.bSuccess)
 			return result;
 
-		InitTileLayout(context);
+		InitLayout(context);
 
-		if (auto result = ComputeTilesOccupancy(context, bakingData); !result.bSuccess)
+		if (auto result = ComputeTilesOccupancy(context); !result.bSuccess)
 			return result;
 
-		InitFileLayout(context, baker.GetMapType(), bUseHybrid);
 
-		if (auto result = InitDirectoryStrategy(); !result.bSuccess)
-			return result;
-
-		if (auto result = ResolveMapPath(pathResolver, baker); !result.bSuccess)
+		if (auto result = ResolveMapPath(context, pathResolver); !result.bSuccess)
 			return result;
 
 		return { true, "" };
 	}
 
-	Data::SRunResult CMapFileWriter::ValidateBakeContext(const Data::SLevelContext& context) const noexcept
+	Data::SRunResult CMapFileWriter::ValidateBakeContext(const SBakeContext& context) const noexcept
 	{
-		if (context.gridWidth <= 0 || context.gridHeight <= 0)
+		if (context.levelContext.gridWidth <= 0 || context.levelContext.gridHeight <= 0)
 			return { false, "Cannot bake: Level grid dimensions are invalid (Zero terrain size?)" };
-		if (context.tileSize == 0)
+		if (context.levelContext.tileSize == 0)
 			return { false, "Cannot bake: Tile size must be greater than zero" };
-		if (m_bakeContext.channelsCount == 0)
+		if (m_writeContext.channelsCount == 0)
 			return { false, "Cannot bake: Baker returned zero channels" };
 		return { true, "" };
 	}
 
-	void CMapFileWriter::InitTileLayout(const Data::SLevelContext& context) noexcept
+	void CMapFileWriter::InitLayout(const SBakeContext& context) noexcept
 	{
-		m_bakeContext.tileCountX = (static_cast<uint32>(context.gridWidth) + context.tileSize - 1) / context.tileSize;
-		m_bakeContext.tileCountY = (static_cast<uint32>(context.gridHeight) + context.tileSize - 1) / context.tileSize;
-		m_bakeContext.totalTiles = static_cast<uint64>(m_bakeContext.tileCountX) * m_bakeContext.tileCountY;
+		m_writeContext.mapType = context.baker.GetMapType();
+		m_writeContext.tilesOffset = sizeof(SMapHeader);
+
+		m_writeContext.tileCountX = (static_cast<uint32>(context.levelContext.gridWidth) + context.levelContext.tileSize - 1) / context.levelContext.tileSize;
+		m_writeContext.tileCountY = (static_cast<uint32>(context.levelContext.gridHeight) + context.levelContext.tileSize - 1) / context.levelContext.tileSize;
+		m_writeContext.totalTiles = static_cast<uint64>(m_writeContext.tileCountX) * m_writeContext.tileCountY;
 	}
 
-	void CMapFileWriter::InitFileLayout(const Data::SLevelContext& context, EMapType mapType, bool bUseHybrid) noexcept
+	Data::SRunResult CMapFileWriter::ComputeTilesOccupancy(const SBakeContext& context)
 	{
-		m_bakeContext.directoryOffset = sizeof(SMapHeader);
-		m_bakeContext.mapType = mapType;
-		m_bakeContext.entryFormat = DetermineEntryFormat(context, bUseHybrid);
-		m_bakeContext.tilesOffset = CalculateDataOffset(m_bakeContext.entryFormat, m_bakeContext.nonEmptyTilesCount);
-	}
-
-	Data::SRunResult CMapFileWriter::ComputeTilesOccupancy(const Data::SLevelContext& context, BakeData bakingData)
-	{
-		const size_t bitmaskSize = (m_bakeContext.totalTiles + 63) / 64;
-		if (!Utils::Common::TryAssign(m_bakeContext.bitmask, bitmaskSize, 0))
+		const size_t bitmaskSize = (m_writeContext.totalTiles + 63) / 64;
+		if (!Utils::Common::TryAssign(m_writeContext.bitmask, bitmaskSize, 0))
 			return { false, "Out of Memory: Failed to allocate tile occupancy data" };
 
-		m_bakeContext.nonEmptyTilesCount = 0;
-		for (int32 y = 0; y < context.gridHeight; ++y)
+		m_writeContext.nonEmptyTilesCount = 0;
+		for (int32 y = 0; y < context.levelContext.gridHeight; ++y)
 		{
-			const uint32 ty = y / context.tileSize;
-			const size_t rowTileOffset = static_cast<size_t>(ty) * m_bakeContext.tileCountX;
-			const uint8* pRow = bakingData.data() + static_cast<size_t>(y) * context.gridWidth * m_bakeContext.channelsCount;
+			const uint32 ty = y / context.levelContext.tileSize;
+			const size_t rowTileOffset = static_cast<size_t>(ty) * m_writeContext.tileCountX;
+			const uint8* pRow = context.bakingData.data() + static_cast<size_t>(y) * context.levelContext.gridWidth * m_writeContext.channelsCount;
 
 			uint tx = 0;
 			uint32 xInTile = 0;
 
-			for (int32 x = 0; x < context.gridWidth; ++x)
+			for (int32 x = 0; x < context.levelContext.gridWidth; ++x)
 			{
 				const size_t tileIndex = rowTileOffset + tx;
 				const size_t blockIndex = tileIndex / 64;
 				const uint64 bitFlag = 1ULL << (tileIndex % 64);
 
-				if ((m_bakeContext.bitmask[blockIndex] & bitFlag) == 0 && PixelHasData(pRow, m_bakeContext.channelsCount))
+				if ((m_writeContext.bitmask[blockIndex] & bitFlag) == 0 && PixelHasData(pRow, m_writeContext.channelsCount))
 				{
-					m_bakeContext.bitmask[blockIndex] |= bitFlag;
-					m_bakeContext.nonEmptyTilesCount++;
+					m_writeContext.bitmask[blockIndex] |= bitFlag;
+					m_writeContext.nonEmptyTilesCount++;
 				}
 
-				pRow += m_bakeContext.channelsCount;
-				if (++xInTile == context.tileSize)
+				pRow += m_writeContext.channelsCount;
+				if (++xInTile == context.levelContext.tileSize)
 					{ tx++; xInTile = 0; }
 			}
 		}
 		return { true, "" };
 	}
 
-	ETileEntryFormat CMapFileWriter::DetermineEntryFormat(const Data::SLevelContext& context, bool bUseHybrid) const noexcept
+	Data::SRunResult CMapFileWriter::ResolveMapPath(const SBakeContext& context, FileSystem::CPathResolver& pathResolver)
 	{
-		if (!bUseHybrid)
-			return ETileEntryFormat::Bitmask;
-
-		const uint64 size32 = CalculateSerializedSize(context, sizeof(uint32));
-
-		return size32 <= UINT32_MAX ? ETileEntryFormat::Hybrid_32 : ETileEntryFormat::Hybrid_64;
-	}
-
-	uint64 CMapFileWriter::CalculateSerializedSize(const Data::SLevelContext& context, uint64 offsetSize) const noexcept
-	{
-		const uint64 bitmaskBytes = m_bakeContext.bitmask.size() * sizeof(uint64);
-		const uint64 offsetsCount = m_bakeContext.nonEmptyTilesCount + 1;
-		const uint64 fullTileByteSize = static_cast<uint64>(context.tileSize) * context.tileSize * m_bakeContext.channelsCount;
-
-		return sizeof(SMapHeader) + bitmaskBytes + offsetsCount * offsetSize + m_bakeContext.nonEmptyTilesCount * fullTileByteSize;
-	}
-
-	uint64 CMapFileWriter::CalculateDataOffset(ETileEntryFormat format, uint64 nonEmptyTilesCount) const noexcept
-	{
-		const uint64 bitmaskBytes = m_bakeContext.bitmask.size() * sizeof(uint64_t);
-		uint64 offsetBytes = 0;
-
-		switch (format)
-		{
-		case ETileEntryFormat::Bitmask: break;
-		case ETileEntryFormat::Hybrid_32:
-			offsetBytes = (nonEmptyTilesCount + 1) * sizeof(uint32);
-			break;
-		case ETileEntryFormat::Hybrid_64:
-			offsetBytes = (nonEmptyTilesCount + 1) * sizeof(uint64);
-			break;
-		}
-
-		return sizeof(SMapHeader) + bitmaskBytes + offsetBytes;
-	}
-
-	Data::SRunResult CMapFileWriter::ResolveMapPath(FileSystem::CPathResolver& pathResolver, const Bakers::IMapBaker& baker)
-	{
-		if (auto resultPath = pathResolver.GetMapPath(baker.GetID()))
-			m_bakeContext.mapPath = std::move(*resultPath);
+		if (auto resultPath = pathResolver.GetMapPath(context.baker.GetID()))
+			m_writeContext.mapPath = std::move(*resultPath);
 		else
 			return { false, "Disk I/O Error: Cannot get map's path" };
 		return { true, "" };
 	}
 
-	Data::SRunResult CMapFileWriter::InitDirectoryStrategy() noexcept
+	Data::SRunResult CMapFileWriter::InitCompressStrategy(const SBakeContext& context) noexcept
 	{
-		switch (m_bakeContext.entryFormat)
+		switch (context.compressAlg)
 		{
-		case ETileEntryFormat::Bitmask:
-			m_strategy.emplace<TBitmaskStrategy>();
+		case ECompressionAlg::None:
+			m_compressStrategy.emplace<std::monostate>();
 			return { true, "" };
-		case ETileEntryFormat::Hybrid_32:
-			m_strategy.emplace<THybrid32Strategy>();
+		case ECompressionAlg::Zlib:
+			m_compressStrategy.emplace<TZlibCompressStrategy>();
 			return { true, "" };
-		case ETileEntryFormat::Hybrid_64:
-			m_strategy.emplace<THybrid64Strategy>();
+		case ECompressionAlg::Zstd:
+			m_compressStrategy.emplace<TZstdCompressStrategy>();
+			return { true, "" };
+		case ECompressionAlg::LZ4:
+			m_compressStrategy.emplace<TLZ4CompressStrategy>();
 			return { true, "" };
 		default:
-			return { false, "Unknown or unsupported map directory format" };
+			return { false, "Unknown or unsupported compression algorithm" };
 		}
 	}
 
-	void CMapFileWriter::InitProgressTasks(const Data::SLevelContext& context, Utils::Common::CProgressor* pProgressor)
+	void CMapFileWriter::InitProgressTasks(const SBakeContext& context, Utils::Common::CProgressor* pProgressor)
 	{
 		if (!pProgressor)
 			return;
 
-		const size_t bytesPerTile = static_cast<size_t>(context.tileSize) * context.tileSize * m_bakeContext.channelsCount;
-		const size_t tilesTotalBytes = m_bakeContext.nonEmptyTilesCount * bytesPerTile;
+		const size_t bytesPerTile = static_cast<size_t>(context.levelContext.tileSize) * context.levelContext.tileSize * m_writeContext.channelsCount;
+		const size_t tilesTotalBytes = m_writeContext.nonEmptyTilesCount * bytesPerTile;
 
-		size_t dirTotalBytes = m_bakeContext.bitmask.size() * sizeof(uint64);
+		size_t dirTotalBytes = m_writeContext.bitmask.size() * sizeof(uint64);
 
-		switch (m_bakeContext.entryFormat)
+		switch (context.entryFormat)
 		{
 		case ETileEntryFormat::Hybrid_32:
-			dirTotalBytes += static_cast<size_t>(m_bakeContext.nonEmptyTilesCount + 1) * sizeof(uint32);
+			dirTotalBytes += static_cast<size_t>(m_writeContext.nonEmptyTilesCount + 1) * sizeof(uint32);
 			break;
 		case ETileEntryFormat::Hybrid_64:
-			dirTotalBytes += static_cast<size_t>(m_bakeContext.nonEmptyTilesCount + 1) * sizeof(uint64);
+			dirTotalBytes += static_cast<size_t>(m_writeContext.nonEmptyTilesCount + 1) * sizeof(uint64);
 			break;
 		}
 
-		m_bakeContext.pTilesTask = pProgressor->RegisterProgressTask(tilesTotalBytes, 1);
-		m_bakeContext.pDirectoryTask = pProgressor->RegisterProgressTask(dirTotalBytes, 1);
+		m_writeContext.pTilesTask = pProgressor->RegisterProgressTask(tilesTotalBytes);
+		m_writeContext.pDirectoryTask = pProgressor->RegisterProgressTask(dirTotalBytes);
+
+		const bool bCompressDir = (context.compressBlocks & static_cast<uint8>(ECompressedBlocks::Directory)) != 0;
+		if (bCompressDir)
+		{
+			m_writeContext.pDirectoryFlushTask = pProgressor->ReserveProgressTask(10);
+		}
 	}
 }

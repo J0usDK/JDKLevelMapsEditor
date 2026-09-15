@@ -38,9 +38,11 @@ namespace JDKLevelMaps::Utils::Common
 	{
 	public:
 		SProgressTask() = delete;
-		SProgressTask(size_t totalOps, size_t weight, std::atomic<int>& progressRef, std::atomic<bool>& bCancelledRef) noexcept
-			: totalOperations(totalOps), operationWeight(weight), progress(progressRef), bCancelled(bCancelledRef) {
+		explicit SProgressTask(size_t totalOps, std::atomic<int>& progressRef, std::atomic<bool>& bCancelledRef) noexcept
+			: totalOperations(totalOps), progress(progressRef), bCancelled(bCancelledRef) {
 		}
+		explicit SProgressTask(uint8 reservedProgress, std::atomic<int>& progressRef, std::atomic<bool>& bCancelledRef) noexcept
+			: reservedProgress(reservedProgress), progress(progressRef), bCancelled(bCancelledRef) { }
 
 		// Returns false if operation was cancelled
 		[[nodiscard]] bool Update(double currentOperation) noexcept
@@ -52,7 +54,7 @@ namespace JDKLevelMaps::Utils::Common
 				return false;
 
 			const double localRatio = currentOperation / static_cast<double>(totalOperations);
-			const double currentGlobalContribution = localRatio * progressRange * 100.0;
+			const double currentGlobalContribution = localRatio * progressFraction * 100.0;
 			const int currentInt = static_cast<int>(currentGlobalContribution);
 			const int delta = currentInt - m_lastReportedContribution;
 
@@ -65,14 +67,26 @@ namespace JDKLevelMaps::Utils::Common
 			return true;
 		}
 
+		void SetMaxValue(size_t maxValue) noexcept
+		{
+			CRY_ASSERT(maxValue > 0);
+			if (maxValue == totalOperations)
+				return;
+
+			totalOperations = maxValue;
+		}
+
 	private:
 		friend class CProgressor;
 
-		double progressRange = 0.0;
+		double progressFraction = 0.0;
 		int m_lastReportedContribution = 0;
 
-		const size_t totalOperations = 0;
-		const size_t operationWeight = 0;
+		size_t totalOperations = 0;
+
+		// 0 means this is a normal dynamically weighted task.
+		// Non-zero value means this task owns a fixed percentage of the progress.
+		const uint8 reservedProgress = 0;
 
 		std::atomic<int>& progress;
 		std::atomic<bool>& bCancelled;
@@ -86,7 +100,10 @@ namespace JDKLevelMaps::Utils::Common
 		~CProgressor() = default;
 
 		// Register all tasks before progress updates begin for accurate progress weighting.
-		[[nodiscard]] SProgressTask* RegisterProgressTask(size_t totalOperations, size_t operationWeight);
+		[[nodiscard]] SProgressTask* RegisterProgressTask(size_t totalOperations);
+
+		// Use for tasks where max operation count is undefined
+		[[nodiscard]] SProgressTask* ReserveProgressTask(uint8 percent);
 
 		[[nodiscard]] bool IsCancelled() const noexcept;
 

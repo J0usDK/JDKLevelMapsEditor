@@ -82,12 +82,23 @@ add_sources("JDKLevelMapsPlugin_Core_MapWork_uber.cpp"
 		"Core/MapWork/Read/MapFileReader_Read.cpp"
 
 	SOURCE_GROUP "Core\\\\MapWork\\\\Strategies"
-		"Core/MapWork/Strategies/DirectoryBitmaskStrategy.h"
-		"Core/MapWork/Strategies/DirectoryBitmaskStrategy.cpp"
-		"Core/MapWork/Strategies/DirectoryHybridStrategy.h"
-		"Core/MapWork/Strategies/DirectoryHybridStrategy.cpp"
-		"Core/MapWork/Strategies/IDirectoryFormatStrategy.h"
-		"Core/MapWork/Strategies/IDirectoryFormatStrategy.cpp"
+
+	SOURCE_GROUP "Core\\\\MapWork\\\\Strategies\\\\DirectoryFormat"
+		"Core/MapWork/Strategies/DirectoryFormat/DirectoryBitmaskStrategy.h"
+		"Core/MapWork/Strategies/DirectoryFormat/DirectoryBitmaskStrategy.cpp"
+		"Core/MapWork/Strategies/DirectoryFormat/DirectoryHybridStrategy.h"
+		"Core/MapWork/Strategies/DirectoryFormat/DirectoryHybridStrategy.cpp"
+		"Core/MapWork/Strategies/DirectoryFormat/IDirectoryFormatStrategy.h"
+		"Core/MapWork/Strategies/DirectoryFormat/IDirectoryFormatStrategy.cpp"
+
+	SOURCE_GROUP "Core\\\\MapWork\\\\Strategies\\\\Compression"
+		"Core/MapWork/Strategies/Compression/ICompressionStrategy.h"
+		"Core/MapWork/Strategies/Compression/LZ4CompressionStrategy.h"
+		"Core/MapWork/Strategies/Compression/LZ4CompressionStrategy.cpp"
+		"Core/MapWork/Strategies/Compression/ZstdCompressionStrategy.h"
+		"Core/MapWork/Strategies/Compression/ZstdCompressionStrategy.cpp"
+		"Core/MapWork/Strategies/Compression/ZlibCompressionStrategy.h"
+		"Core/MapWork/Strategies/Compression/ZlibCompressionStrategy.cpp"
 )
 
 add_sources("JDKLevelMapsPlugin_Core_Orchestration_uber.cpp"
@@ -135,6 +146,7 @@ add_sources("JDKLevelMapsPlugin_Shared_uber.cpp"
 	SOURCE_GROUP "Shared"
 		"Shared/MapHeader.h"
 		"Shared/MapLayers.h"
+		"Shared/CompressionFormat.h"
 )
 
 add_sources("JDKLevelMapsPlugin_Utils_uber.cpp"
@@ -151,9 +163,11 @@ add_sources("JDKLevelMapsPlugin_Utils_uber.cpp"
 		"Utils/IOUtils.h"
 )
 
-add_sources("JDKLevelMapsPlugin_Includes_uber.cpp"
+add_sources("NoUberFile"
 	SOURCE_GROUP "Includes"
+)
 
+add_sources("NoUberFile"
 	SOURCE_GROUP "Includes\\\\JDKMath"
 		"Includes/JDKMath/MathConfig.h"
 		"Includes/JDKMath/MathAssert.h"
@@ -165,6 +179,9 @@ add_sources("JDKLevelMapsPlugin_Includes_uber.cpp"
 		"Includes/JDKMath/TwoLevelRankTable.h"
 		"Includes/JDKMath/UniversalRankTable.h"
 )
+
+include("Includes/LZ4/LZ4.cmake")
+include("Includes/Zstd/Zstd.cmake")
 
 end_sources()
 

@@ -16,11 +16,12 @@ namespace JDKLevelMaps::Data
 	{
 		Utils::Common::SProgressTask* pTilesTask = nullptr;
 		Utils::Common::SProgressTask* pDirectoryTask = nullptr;
+		Utils::Common::SProgressTask* pDirectoryFlushTask = nullptr;
 
 		EMapType mapType = EMapType::VegetationDensity;
-		ETileEntryFormat entryFormat = ETileEntryFormat::Bitmask;
-
 		std::string mapPath = "";
+
+		uint64 tilesOffset = 0;
 
 		uint32 channelsCount = 0;
 		uint32 layersMask = 0;
@@ -28,8 +29,6 @@ namespace JDKLevelMaps::Data
 		uint32 tileCountY = 0;
 		uint64 totalTiles = 0;
 
-		uint64 directoryOffset = 0;
-		uint64 tilesOffset = 0;
 		uint64 nonEmptyTilesCount = 0;
 
 		std::vector<uint64> bitmask;
@@ -37,12 +36,12 @@ namespace JDKLevelMaps::Data
 
 	struct SMapReadContext
 	{
-		Utils::Common::SProgressTask* pReadTask = nullptr;
+		Utils::Common::SProgressTask* pDirTask = nullptr;
+		Utils::Common::SProgressTask* pTilesTask = nullptr;
 		Bakers::DebugColorMapperPtr pColorMapper = nullptr;
 
 		SMapHeader header;
 		uint32 channelsCount = 0;
-		uint64 directoryOffset = 0;
 
 		std::string mapPath;
 	};

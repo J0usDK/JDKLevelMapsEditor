@@ -2,9 +2,11 @@
 #include <cmath>
 #include <CryCore/BaseTypes.h>
 
+#include "CompressionFormat.h"
+
 namespace JDKLevelMaps
 {
-	constexpr uint8 kLayerMapVersion = 4;
+	constexpr uint8 kLayerMapVersion = 5;
 	constexpr uint32 kLayerMapMagic = 0x4A444B4D;
 
 	enum class EMapType : uint8
@@ -16,9 +18,9 @@ namespace JDKLevelMaps
 
 	enum class ETileEntryFormat : uint8
 	{
-		Bitmask = 0,
-		Hybrid_32 = 1,
-		Hybrid_64 = 2
+		Bitmask		= 0,
+		Hybrid_32	= 1,
+		Hybrid_64	= 2
 	};
 
 #pragma pack(push, 1)
@@ -26,9 +28,19 @@ namespace JDKLevelMaps
 	{
 		uint32 magic = kLayerMapMagic;
 		uint8 version = kLayerMapVersion;
+
 		EMapType mapType = EMapType::VegetationDensity;
 		ETileEntryFormat entryFormat = ETileEntryFormat::Bitmask;
 		uint8 activeLayersMask = 0; // bitmask of active layers on map
+
+		ECompressionAlg compressionAlg = ECompressionAlg::None;
+		uint8 compressedBlocks = 0;
+
+		uint8 reserved[6] = { 0 }; // 6 reserved bytes, not currently used, added for alignment
+
+		uint64 directoryOffset = 0;
+		uint64 rawDirectorySize = 0;
+		uint64 compressedDirectorySize = 0;
 
 		int32 gridWidth = 0;
 		int32 gridHeight = 0;
@@ -42,7 +54,7 @@ namespace JDKLevelMaps
 	};
 #pragma pack(pop)
 
-	static_assert(sizeof(SMapHeader) == 40,
+	static_assert(sizeof(SMapHeader) == 72,
 		"The size of SMapHeader has been changed. Keep the in-game reader up to date.");
 
 	static_assert(std::is_trivially_copyable_v<SMapHeader>,
@@ -58,12 +70,47 @@ namespace JDKLevelMaps
 		return format == ETileEntryFormat::Bitmask || format == ETileEntryFormat::Hybrid_32 || format == ETileEntryFormat::Hybrid_64;
 	}
 
+	[[nodiscard]] inline constexpr bool IsValidCompressionAlg(ECompressionAlg alg) noexcept
+	{
+		return alg >= ECompressionAlg::None && alg <= ECompressionAlg::LZ4;
+	}
+
+	[[nodiscard]] inline constexpr bool IsValidCompressedBlocks(uint8 blocks) noexcept
+	{
+		return blocks <= 3;
+	}
+
 	[[nodiscard]] inline constexpr bool IsValidMapHeader(const SMapHeader& header) noexcept
 	{
 		if (header.magic != kLayerMapMagic) return false;
 		if (header.version != kLayerMapVersion) return false;
 		if (!IsValidMapType(header.mapType)) return false;
 		if (!IsValidTileEntryFormat(header.entryFormat)) return false;
+		if (!IsValidCompressionAlg(header.compressionAlg)) return false;
+		if (!IsValidCompressedBlocks(header.compressedBlocks)) return false;
+
+		if (header.compressionAlg == ECompressionAlg::None)
+		{
+			if (header.compressedBlocks != 0) return false;
+			if (header.compressedDirectorySize != 0) return false;
+		}
+		else
+		{
+			const bool bDirCompressed = (static_cast<uint8>(header.compressedBlocks) & static_cast<uint8>(ECompressedBlocks::Directory)) != 0;
+			if (bDirCompressed)
+			{
+				if (header.compressedDirectorySize == 0 || header.rawDirectorySize == 0)
+					return false;
+			}
+			else
+			{
+				if (header.compressedDirectorySize != 0)
+					return false;
+			}
+		}
+
+		if (header.directoryOffset == 0) return false;
+		if (header.activeLayersMask == 0) return false;
 		if (header.gridWidth <= 0 || header.gridHeight <= 0) return false;
 		if (!std::isfinite(header.cellSize) || header.cellSize <= 0) return false;
 		if (header.tileSize == 0) return false;

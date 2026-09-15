@@ -65,6 +65,8 @@ namespace JDKLevelMaps::Views
 		void SetupWidget(QWidget* pWidget);
 		void SetupConnections();
 
+		void UpdateFormatComboBoxState();
+
 		void LoadSettings();
 		void SaveSettings();
 
@@ -78,6 +80,7 @@ namespace JDKLevelMaps::Views
 		QTabBar* m_pTabBar = nullptr;
 		QStackedWidget* m_pStackedWidget = nullptr;
 
+		QComboBox* m_pCompressionComboBox = nullptr;
 		QComboBox* m_pFormatComboBox = nullptr;
 		QDoubleSpinBox* m_pCellSizeSpinBox = nullptr;
 		QSpinBox* m_pTileSizeSpinBox = nullptr;

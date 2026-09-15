@@ -10,49 +10,65 @@
 
 namespace JDKLevelMaps::MapWork
 {
-	Data::SRunResult CMapFileWriter::Prepare(const Bakers::IMapBaker& baker, const Data::SLevelContext& context, FileSystem::CPathResolver& pathResolver, Utils::Common::CProgressor* pProgressor, BakeData bakingData, bool bUseHybrid)
+	Data::SRunResult CMapFileWriter::Prepare(const SBakeContext& context, FileSystem::CPathResolver& pathResolver)
 	{
-		if (auto result = BuildBakeContext(baker, pathResolver, context, bakingData, bUseHybrid); !result.bSuccess)
+		if (auto result = InitCompressStrategy(context); !result.bSuccess)
 			return result;
 
-		InitDirectoryStrategy();
-
-		InitProgressTasks(context, pProgressor);
+		if (auto result = BuildWriteContext(context, pathResolver); !result.bSuccess)
+			return result;
 
 		m_bReady = true;
 		return { true, "" };
 	}
 
-	Data::SRunResult CMapFileWriter::BakeMap(const Bakers::IMapBaker& baker, const Data::SLevelContext& context, BakeData bakingData)
+	Data::SRunResult CMapFileWriter::BakeMap(const SBakeContext& context, Utils::Common::CProgressor* pProgressor)
 	{
 		if (!std::exchange(m_bReady, false))
 			return { false, "Internal Error: Map Writer is not ready" };
 
-		Utils::FileSystem::ScopedCryFile file(FileSystem::LFSFacade::FOpen(m_bakeContext.mapPath.c_str(), "wb", true), m_bakeContext.mapPath.c_str());
+		InitProgressTasks(context, pProgressor);
+
+		Utils::FileSystem::ScopedCryFile file(FileSystem::LFSFacade::FOpen(m_writeContext.mapPath.c_str(), "wb", true), m_writeContext.mapPath.c_str());
 		if (!file)
 			return { false, "Disk I/O Error: Cannot open map file for writing" };
 
-		if (!WriteHeader(context, file))
-			return { false, "Disk I/O Error: Cannot write map's header" };
-
 		Data::SRunResult result;
-		switch (m_bakeContext.entryFormat)
+		switch (context.entryFormat)
 		{
 		case ETileEntryFormat::Bitmask:
-			result = WriteMap(context, file, bakingData);
+			result = WriteMap(context, file);
 			break;
 		case ETileEntryFormat::Hybrid_32:
-			result = WriteMap<uint32>(context, file, bakingData);
+			result = WriteMap<uint32>(context, file);
 			break;
 		case ETileEntryFormat::Hybrid_64:
-			result = WriteMap<uint64>(context, file, bakingData);
+			result = WriteMap<uint64>(context, file);
 			break;
 		}
 
 		if (!result.bSuccess)
 			return result;
 
+		if (!WriteHeader(context, file))
+			return { false, "Disk I/O Error: Cannot write map's header" };
+
 		file.close(true);
-		return { true, "Map was written to: " + m_bakeContext.mapPath };
+		return { true, "Map was written to: " + m_writeContext.mapPath };
+	}
+
+	uint64 CMapFileWriter::GetNonEmptyTilesCount() const noexcept
+	{
+		return m_writeContext.nonEmptyTilesCount;
+	}
+
+	const Strategies::ICompressionStrategy* CMapFileWriter::GetCompressor() const noexcept
+	{
+		return std::visit([](auto&& strategy) -> const Strategies::ICompressionStrategy* {
+			using T = std::decay_t<decltype(strategy)>;
+			if constexpr (std::is_same_v<T, std::monostate>)
+				return nullptr;
+			else return &strategy;
+		}, m_compressStrategy);
 	}
 }
