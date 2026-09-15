@@ -17,7 +17,7 @@ namespace JDKLevelMaps::Data
 
 	[[nodiscard]] inline SLevelContext ComputeLevelContext(float cellSize, uint32 tileSize) noexcept
 	{
-		if (cellSize < 0.1f)
+		if (!(cellSize >= 0.1f))
 			cellSize = 0.1f;
 		if (tileSize == 0)
 			tileSize = 1;

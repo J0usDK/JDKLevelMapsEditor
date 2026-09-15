@@ -60,6 +60,8 @@ namespace JDKLevelMaps::ViewModels
 		void CheckPreviewAvailability(EMapType mapType);
 		void RegisterBaker(std::unique_ptr<Bakers::IMapBaker> pBaker);
 
+		void JoinThread() noexcept;
+
 		[[nodiscard]] EOperationState GetCurrentOperationState() const noexcept;
 		[[nodiscard]] bool IsOperationCancelled() const noexcept;
 		[[nodiscard]] Settings::SBakerSettings& GetSettings() noexcept;
@@ -88,7 +90,6 @@ namespace JDKLevelMaps::ViewModels
 		uint64 UpdateOperation(uint64 operationID, EOperationState state) noexcept;
 		void ForceUpdateOperation(EOperationState state) noexcept;
 		void StopProgressTimer();
-		void JoinThread() noexcept;
 
 	private:
 		// @warning Not thread-safe.

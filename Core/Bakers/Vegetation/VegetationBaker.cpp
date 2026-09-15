@@ -84,7 +84,7 @@ namespace JDKLevelMaps::Bakers
 			const float relX = (object.pos.x - context.originX) * invCellSize;
 			const float relY = (object.pos.y - context.originY) * invCellSize;
 
-			if (relX < 0.0f || relX >= fGridWidth || relY < 0.0f || relY >= fGridHeight)
+			if (!(relX >= 0.0f && relX < fGridWidth && relY >= 0.0f || relY < fGridHeight))
 				continue;
 
 			const uint32 gridX = static_cast<uint32>(relX);

@@ -49,6 +49,7 @@ namespace JDKLevelMaps::Utils::Common
 		{
 			CRY_ASSERT(std::isfinite(currentOperation));
 			CRY_ASSERT(currentOperation <= static_cast<double>(totalOperations));
+			CRY_ASSERT(totalOperations > 0);
 
 			if (bCancelled.load(std::memory_order_relaxed))
 				return false;

@@ -66,7 +66,7 @@ namespace JDKLevelMaps::MapWork
 		[[nodiscard]] Data::SRunResult ReadMap(FILE* pFile, ImageWork::SImageView& outImage);
 		[[nodiscard]] Data::SRunResult ReadDirectory(FILE* pFile, std::vector<uint8>& outDirectory);
 		[[nodiscard]] Data::SRunResult ReadTiles(FILE* pFile, const std::vector<uint8>& directory, ImageWork::SImageView& outImage);
-		[[nodiscard]] Data::SRunResult ReadTile(uint64 tileIndex, FILE* pFile, std::vector<uint8>& tileBuffer, SDecompressor& decompressor, ImageWork::Converters::SConvertContext& convertCtx);
+		[[nodiscard]] Data::SRunResult ReadTile(uint64 tileIndex, FILE* pFile, std::vector<uint8>& tileBuffer, SDecompressor& decompressor, ImageWork::Converters::SConvertContext& convertCtx, uint64 realTileSize);
 
 	private:
 		using TBitmaskStrategy = Strategies::CDirectoryBitmaskStrategy;

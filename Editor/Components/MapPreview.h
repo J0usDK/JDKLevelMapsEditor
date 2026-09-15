@@ -14,7 +14,7 @@ namespace JDKLevelMaps::Components
 
 		void SetPixmap(const QPixmap& pixmap);
 		void ResetPixmap(const QString& text);
-		bool HasPixmap() const noexcept;
+		[[nodiscard]] bool HasPixmap() const noexcept;
 
 		void EnableLoadButton(bool bEnable);
 		void ShowLoadButton(bool bShow);

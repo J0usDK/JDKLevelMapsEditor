@@ -47,6 +47,12 @@ namespace JDKLevelMaps::Views
 		case eNotify_OnBeginSceneClose:
 		case eNotify_OnBeginNewScene:
 		case eNotify_OnBeginLoad:
+			if (m_pViewModel->GetCurrentOperationState() != ViewModels::EOperationState::Idle)
+			{
+				m_pViewModel->StopBaking();
+				m_pViewModel->StopLoadingPreview();
+				m_pViewModel->JoinThread();
+			}
 			UpdateLevelState(false);
 			break;
 		case eNotify_OnEndLoad:
@@ -105,6 +111,14 @@ namespace JDKLevelMaps::Views
 		m_bLevelLoaded = bLevelLoaded;
 		m_pViewModel->RecomputePaths();
 		m_pViewModel->CheckPreviewAvailability(GetActiveMapType());
+
+		if (bLevelLoaded)
+		{
+			UpdateCellSizeLimits();
+			const float cellSize = m_pViewModel->GetSettings().cellSize;
+			UpdateTileSizeLimits(cellSize);
+		}
+
 		UpdateUIState();
 	}
 
@@ -112,10 +126,11 @@ namespace JDKLevelMaps::Views
 	{
 		const auto& currentSettings = m_pViewModel->GetSettings();
 
+		m_pStackedWidget = new QStackedWidget(pWidget);
+
 		auto* pVegWidget = new CVegetationEditor(this, m_pStackedWidget);
 		m_pViewModel->RegisterBaker(pVegWidget->CreateBaker());
 
-		m_pStackedWidget = new QStackedWidget(pWidget);
 		m_pStackedWidget->addWidget(pVegWidget);
 
 		m_pTabBar = new QTabBar(pWidget);
@@ -196,16 +211,14 @@ namespace JDKLevelMaps::Views
 
 	void CJDKLevelMapsEditor::SetupConnections()
 	{
-		auto& settings = m_pViewModel->GetSettings();
-
 		connect(m_pTabBar, &QTabBar::currentChanged, m_pStackedWidget, &QStackedWidget::setCurrentIndex);
 
 		connect(m_pTabBar, &QTabBar::currentChanged, this, [&]() {
 			m_pViewModel->CheckPreviewAvailability(GetActiveMapType());
 		});
 
-		connect(m_pCompressionComboBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [&](int index) {
-			settings.compression = static_cast<Settings::ECompression>(m_pCompressionComboBox->itemData(index).toInt());
+		connect(m_pCompressionComboBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
+			m_pViewModel->GetSettings().compression = static_cast<Settings::ECompression>(m_pCompressionComboBox->itemData(index).toInt());
 			UpdateFormatComboBoxState();
 			SaveSettings();
 		});
@@ -226,20 +239,24 @@ namespace JDKLevelMaps::Views
 
 		connect(m_pViewModel, &ViewModels::CLevelMapsViewModel::previewLoaded, this, &CJDKLevelMapsEditor::OnPreviewLoaded);
 
-		connect(m_pCellSizeSpinBox, qOverload<double>(&QDoubleSpinBox::valueChanged), this, &CJDKLevelMapsEditor::OnCellSizeChanged);
-
-		connect(m_pGenerateImageCheckBox, &QCheckBox::toggled, this, [&](bool bChecked) {
-			settings.bGenerateDebugImage = bChecked;
+		connect(m_pGenerateImageCheckBox, &QCheckBox::toggled, this, [this](bool bChecked) {
+			m_pViewModel->GetSettings().bGenerateDebugImage = bChecked;
 			SaveSettings();
 		});
 
-		connect(m_pFormatComboBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [&](int index) {
-			settings.directoryFormat = static_cast<Settings::EDirectoryFormat>(m_pFormatComboBox->itemData(index).toInt());
+		connect(m_pFormatComboBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int index) {
+			m_pViewModel->GetSettings().directoryFormat = static_cast<Settings::EDirectoryFormat>(m_pFormatComboBox->itemData(index).toInt());
 			SaveSettings();
 		});
 
-		connect(m_pTileSizeSpinBox, qOverload<int>(&QSpinBox::valueChanged), this, [&](int value) {
-			settings.tileSize = static_cast<uint32>(value);
+		connect(m_pCellSizeSpinBox, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double value) {
+			float cellSize = static_cast<float>(value);
+			m_pViewModel->GetSettings().cellSize = cellSize;
+			UpdateTileSizeLimits(cellSize);
+		});
+
+		connect(m_pTileSizeSpinBox, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
+			m_pViewModel->GetSettings().tileSize = static_cast<uint32>(value);
 			SaveSettings();
 		});
 	}
@@ -310,7 +327,7 @@ namespace JDKLevelMaps::Views
 			return;
 		}
 
-		if (bHasImage)
+		if (bHasImage && m_pViewModel->GetCurrentOperationState() == ViewModels::EOperationState::Idle)
 		{
 			m_pMapPreview->ResetPixmap(tr("Loading preview image..."));
 			m_pViewModel->LoadPreviewFromDiskAsync(GetActiveMapType());
@@ -333,19 +350,22 @@ namespace JDKLevelMaps::Views
 		m_pProgressBar->setValue(0);
 
 		if (!m_pViewModel->IsOperationCancelled())
-			ShowError("Preview Image generation failed with error", message);
+			ShowError("Preview Image loading failed with error: ", message);
 		else
-			JDK_LOG("Preview loading was cancelled by user");
+			JDK_LOG("Preview Image loading was cancelled by user");
 
 		m_pMapPreview->ResetPixmap(tr("No preview generated yet"));
 	}
 
-	void CJDKLevelMapsEditor::OnCellSizeChanged(double value)
+	void CJDKLevelMapsEditor::UpdateCellSizeLimits()
 	{
-		auto& settings = m_pViewModel->GetSettings();
-		settings.cellSize = static_cast<float>(value);
+		m_pCellSizeSpinBox->setRange(0.1, m_pViewModel->GetMaxCellSize());
+		SaveSettings();
+	}
 
-		m_pTileSizeSpinBox->setMaximum(m_pViewModel->CalculateMaxTileSize(settings.cellSize));
+	void CJDKLevelMapsEditor::UpdateTileSizeLimits(float cellSize)
+	{
+		m_pTileSizeSpinBox->setMaximum(m_pViewModel->CalculateMaxTileSize(cellSize));
 		SaveSettings();
 	}
 
@@ -371,10 +391,10 @@ namespace JDKLevelMaps::Views
 		settings.tileSize = std::clamp(loadedTileSize, static_cast<uint32>(1), m_pViewModel->CalculateMaxTileSize(settings.cellSize));
 
 		const uint8 compression = Utils::ConvertUtils::QVariantToUint8(GetProjectProperty("JDKLevelMaps/Compression"), static_cast<uint8>(settings.compression));
-		settings.compression = static_cast<Settings::ECompression>(compression);
+		settings.compression = static_cast<Settings::ECompression>(std::clamp<uint8>(compression, 0, static_cast<uint8>(Settings::ECompression::LZ4Both)));
 
 		const uint8 loadedFormat = Utils::ConvertUtils::QVariantToUint8(GetProjectProperty("JDKLevelMaps/DirectoryFormat"), static_cast<uint8>(settings.directoryFormat));
-		settings.directoryFormat = static_cast<Settings::EDirectoryFormat>(std::clamp<uint8>(loadedFormat, 0, 1));
+		settings.directoryFormat = static_cast<Settings::EDirectoryFormat>(std::clamp<uint8>(loadedFormat, 0, static_cast<uint8>(Settings::EDirectoryFormat::Hybrid)));
 
 		settings.bGenerateDebugImage = Utils::ConvertUtils::QVariantToBool(GetProjectProperty("JDKLevelMaps/GenerateDebugImage"), settings.bGenerateDebugImage);
 	}

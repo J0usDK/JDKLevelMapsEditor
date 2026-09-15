@@ -83,6 +83,8 @@ namespace
 
 		[[nodiscard]] JDKLevelMaps::Data::SRunResult operator()(uint64 offset)
 		{
+			CRY_ASSERT(offset <= std::numeric_limits<TOffset>::max(), "Offset exceeded chosen limit");
+
 			buffer.push_back(static_cast<TOffset>(offset));
 
 			if (bCompress && buffer.size() == buffer.capacity())

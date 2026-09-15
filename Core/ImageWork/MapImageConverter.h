@@ -27,14 +27,14 @@ namespace JDKLevelMaps::ImageWork::Converters
 	{
 		const uint32 safeGridHeight = static_cast<uint32>(std::max(0, ctx.header.gridHeight));
 		const uint32 safeGridWidth = static_cast<uint32>(std::max(0, ctx.header.gridWidth));
-		const uint32 maxLy = std::min(ctx.header.tileSize, static_cast<uint32>(safeGridHeight - (ty * ctx.header.tileSize)));
-		const uint32 maxLx = std::min(ctx.header.tileSize, static_cast<uint32>(safeGridWidth - (tx * ctx.header.tileSize)));
+		const uint32 startGx = tx * ctx.header.tileSize;
+		const uint32 startGy = ty * ctx.header.tileSize;
 
 		const size_t localStride = static_cast<size_t>(ctx.header.tileSize) * ctx.channelsCount;
 		size_t localRowStart = 0;
 
-		const uint32 startGx = tx * ctx.header.tileSize;
-		const uint32 startGy = ty * ctx.header.tileSize;
+		const uint32 maxLx = startGx < safeGridWidth ? std::min(ctx.header.tileSize, static_cast<uint32>(safeGridWidth - startGx)) : 0;
+		const uint32 maxLy = startGy < safeGridHeight ? std::min(ctx.header.tileSize, static_cast<uint32>(safeGridHeight - startGy)) : 0;
 
 		for (uint32 ly = 0; ly < maxLy; ++ly)
 		{

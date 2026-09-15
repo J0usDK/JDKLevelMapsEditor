@@ -13,6 +13,9 @@ public:
 	CJDKLevelMapsPlugin() { /* entry point of the plugin, perform initializations */ }
 	~CJDKLevelMapsPlugin() { /* exit point of the plugin, perform cleanup */ }
 
+	CJDKLevelMapsPlugin(const CJDKLevelMapsPlugin&) = delete;
+	CJDKLevelMapsPlugin& operator=(const CJDKLevelMapsPlugin&) = delete;
+
 	int32       GetPluginVersion() noexcept override { return 1; }
 	const char* GetPluginName() noexcept override { return "JDKLevelMaps"; }
 	const char* GetPluginDescription() noexcept override { return "Editor extension for generating optimized runtime data maps from level information"; }

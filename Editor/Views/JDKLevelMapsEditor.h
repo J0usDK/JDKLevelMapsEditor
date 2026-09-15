@@ -52,7 +52,6 @@ namespace JDKLevelMaps::Views
 	private slots:
 		void OnGenerateButtonClicked(Components::EButtonState clickedState);
 		void OnLoadPreviewButtonClicked(bool bStart);
-		void OnCellSizeChanged(double value);
 		void OnOperationStateChanged();
 		void OnBakeFinished(bool bSuccess, QString message);
 		void OnPreviewAvailabilityChanged(bool bHasMap, bool bHasImage);
@@ -66,6 +65,8 @@ namespace JDKLevelMaps::Views
 		void SetupConnections();
 
 		void UpdateFormatComboBoxState();
+		void UpdateCellSizeLimits();
+		void UpdateTileSizeLimits(float cellSize);
 
 		void LoadSettings();
 		void SaveSettings();

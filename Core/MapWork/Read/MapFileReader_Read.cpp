@@ -11,13 +11,19 @@ namespace JDKLevelMaps::MapWork
 {
 	struct SDecompressor final
 	{
+		static constexpr size_t CHUNK_SIZE = 1024 * 1024;
+
 		const Strategies::ICompressionStrategy* pStrategy = nullptr;
 		std::unique_ptr<Strategies::IDecompressionContext> pContext = nullptr;
 
+		std::vector<uint8> readBuf;
 		std::vector<uint8> decompressedBuffer;
 
 		explicit SDecompressor(const Strategies::ICompressionStrategy* pStrategy)
-			: pStrategy(pStrategy) { }
+			: pStrategy(pStrategy)
+		{
+			Utils::Common::TryResize(readBuf, CHUNK_SIZE);
+		}
 
 		[[nodiscard]] Data::SRunResult Begin() noexcept
 		{
@@ -33,12 +39,6 @@ namespace JDKLevelMaps::MapWork
 		template<typename TCallback>
 		[[nodiscard]] Data::SRunResult ProcessChunked(FILE* pFile, size_t totalBytesToRead, TCallback callback)
 		{
-			static const constexpr size_t CHUNK_SIZE = 1024 * 1024;
-
-			std::vector<uint8> readBuf;
-			if (!Utils::Common::TryResize(readBuf, CHUNK_SIZE))
-				return { false, "Out of Memory: Failed to allocate chunk buffer" };
-
 			size_t bytesRead = 0;
 			while (bytesRead < totalBytesToRead)
 			{
@@ -77,7 +77,8 @@ namespace JDKLevelMaps::MapWork
 	{
 		const bool bCompressDir = (m_readContext.header.compressedBlocks & static_cast<uint8>(ECompressedBlocks::Directory)) != 0;
 
-		FileSystem::LFSFacade::FSeek(pFile, m_readContext.header.directoryOffset, SEEK_SET);
+		if (FileSystem::LFSFacade::FSeek(pFile, m_readContext.header.directoryOffset, SEEK_SET) != 0)
+			return { false, "Disk I/O Error: Cannot seek to map directory block (file is corrupted?)" };
 
 		auto dirProgress = [&](size_t bytesRead) -> bool {
 			return m_readContext.pDirTask ? m_readContext.pDirTask->Update(static_cast<double>(bytesRead)) : true;
@@ -86,6 +87,9 @@ namespace JDKLevelMaps::MapWork
 		if (bCompressDir)
 		{
 			SDecompressor decompressor(GetDecompressor());
+			if (decompressor.readBuf.empty())
+				return { false, "Out of Memory: Failed to allocate chunk buffer" };
+
 			if (auto result = decompressor.Begin(); !result.bSuccess)
 				return result;
 
@@ -116,22 +120,24 @@ namespace JDKLevelMaps::MapWork
 		std::vector<uint8> tileBuffer;
 		const Strategies::ICompressionStrategy* pDecompressor = GetDecompressor();
 		const uint64 totalTiles = static_cast<uint64>(m_readContext.header.tileCountX) * m_readContext.header.tileCountY;
-		const uint64 maxTileSize = static_cast<uint64>(m_readContext.header.tileSize) * m_readContext.header.tileSize * m_readContext.channelsCount;
+		const uint64 realTileSize = static_cast<uint64>(m_readContext.header.tileSize) * m_readContext.header.tileSize * m_readContext.channelsCount;
 
-		if (!Utils::Common::TryResize(tileBuffer, maxTileSize))
+		if (!Utils::Common::TryResize(tileBuffer, realTileSize))
 			return { false, "Out of Memory: Failed to allocate raw tile buffer" };
 
 		SDecompressor decompressor(pDecompressor);
+		if (decompressor.readBuf.empty())
+			return { false, "Out of Memory: Failed to allocate chunk buffer" };
 
 		for (uint64 i = 0; i < totalTiles; ++i)
-			if (auto result = ReadTile(i, pFile, tileBuffer, decompressor, convertCtx); !result.bSuccess)
+			if (auto result = ReadTile(i, pFile, tileBuffer, decompressor, convertCtx, realTileSize); !result.bSuccess)
 				return result;
 
 		return { true, "" };
 
 	}
 
-	inline Data::SRunResult CMapFileReader::ReadTile(uint64 tileIndex, FILE* pFile, std::vector<uint8>& tileBuffer, SDecompressor& decompressor, ImageWork::Converters::SConvertContext& convertCtx)
+	inline Data::SRunResult CMapFileReader::ReadTile(uint64 tileIndex, FILE* pFile, std::vector<uint8>& tileBuffer, SDecompressor& decompressor, ImageWork::Converters::SConvertContext& convertCtx, uint64 realTileSize)
 	{
 		const auto* pFormat = GetFormat();
 		const auto tileNode = pFormat ? pFormat->GetTileNode(tileIndex) : std::nullopt;
@@ -163,6 +169,9 @@ namespace JDKLevelMaps::MapWork
 
 			if (auto result = decompressor.ProcessChunked(pFile, tileNode->byteSize, tileProgress); !result.bSuccess)
 				return result;
+
+			if (decompressor.decompressedBuffer.size() != realTileSize)
+				return { false, "Corrupted tile: decompressed size mismatch" };
 
 			ImageWork::Converters::MapTileToImage(decompressor.decompressedBuffer, tx, ty, convertCtx);
 		}

@@ -15,7 +15,7 @@ namespace JDKLevelMaps::FileSystem::LFSFacade
 #if defined(JDK_CRYPAK_LFS_PATCH)
 		return JDK_MAX_PAK_FILE_SIZE;
 #else
-		return 2147483648ull;
+		return 2147483647ull;
 #endif
 	}
 
@@ -56,11 +56,15 @@ namespace JDKLevelMaps::FileSystem::LFSFacade
 	{
 		CRY_ASSERT(pFile, "[JDKLevelMaps] Null file pointer passed to LFSFacade::FTell");
 
+		int64 pos = -1;
+
 #if defined(JDK_CRYPAK_LFS_PATCH)
-		return static_cast<uint64>(gEnv->pCryPak->FTell64(pFile));
+		pos = gEnv->pCryPak->FTell64(pFile);
 #else
-		return static_cast<uint64>(gEnv->pCryPak->FTell(pFile));
+		pos = static_cast<int64>(gEnv->pCryPak->FTell(pFile);
 #endif
+		CRY_ASSERT(pos >= 0, "[JDKLevelMaps] FTell returned error");
+		return pos >= 0 ? static_cast<uint64>(pos) : 0;
 	}
 
 	inline size_t FSeek(FILE* pFile, uint64 offset, int mode) noexcept
@@ -70,7 +74,7 @@ namespace JDKLevelMaps::FileSystem::LFSFacade
 #if defined(JDK_CRYPAK_LFS_PATCH)
 		return gEnv->pCryPak->FSeek64(pFile, static_cast<int64>(offset), mode);
 #else
-		CRY_ASSERT(offset <= GetMaxFileSize(), "[JDKLevelMaps] FSeek offset exceeds 2GB limit of unpatched CryPak");
+		if (offset > GetMaxFileSize()) return 1; // error
 		return gEnv->pCryPak->FSeek(pFile, static_cast<long>(offset), mode);
 #endif
 	}
