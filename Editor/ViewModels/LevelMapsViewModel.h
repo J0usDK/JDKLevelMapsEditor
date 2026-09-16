@@ -62,6 +62,7 @@ namespace JDKLevelMaps::ViewModels
 
 		void JoinThread() noexcept;
 
+		[[nodiscard]] bool IsLevelLoaded() const noexcept;
 		[[nodiscard]] EOperationState GetCurrentOperationState() const noexcept;
 		[[nodiscard]] bool IsOperationCancelled() const noexcept;
 		[[nodiscard]] Settings::SBakerSettings& GetSettings() noexcept;

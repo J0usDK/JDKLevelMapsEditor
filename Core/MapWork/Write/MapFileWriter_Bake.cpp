@@ -38,7 +38,7 @@ namespace
 		template<typename TCallback>
 		[[nodiscard]] JDKLevelMaps::Data::SRunResult ProcessChunked(const void* srcData, size_t srcSize, TCallback&& callback)
 		{
-			const static constexpr size_t CHUNK_SIZE = 1024 * 1024;
+			static constexpr size_t CHUNK_SIZE = 1024 * 1024;
 
 			if (!pStrategy || !pContext)
 				return { false, "Internal Error: Compressor or Context not initialized" };

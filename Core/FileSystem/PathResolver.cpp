@@ -19,8 +19,7 @@ namespace JDKLevelMaps::FileSystem
 		m_bInitialized = false;
 		m_defaultPath.clear();
 
-		ILevelEditor* pLevelEditor = GetIEditor()->GetLevelEditor();
-		if (!pLevelEditor || !pLevelEditor->IsLevelLoaded())
+		if (!IsLevelLoaded())
 			return;
 
 		m_defaultPath = gEnv->p3DEngine->GetLevelFilePath("JDKLevelMaps");
@@ -33,6 +32,12 @@ namespace JDKLevelMaps::FileSystem
 
 		m_defaultPath += "/";
 		m_bInitialized = true;
+	}
+
+	bool CPathResolver::IsLevelLoaded() const noexcept
+	{
+		auto* pLevelEditor = GetIEditor()->GetLevelEditor();
+		return pLevelEditor ? pLevelEditor->IsLevelLoaded() : false;
 	}
 
 	std::optional<std::string> CPathResolver::GetMapPath(const char* bakerId) const

@@ -213,7 +213,7 @@ namespace JDKLevelMaps::Views
 	{
 		connect(m_pTabBar, &QTabBar::currentChanged, m_pStackedWidget, &QStackedWidget::setCurrentIndex);
 
-		connect(m_pTabBar, &QTabBar::currentChanged, this, [&]() {
+		connect(m_pTabBar, &QTabBar::currentChanged, this, [this]() {
 			m_pViewModel->CheckPreviewAvailability(GetActiveMapType());
 		});
 
@@ -383,12 +383,13 @@ namespace JDKLevelMaps::Views
 	void CJDKLevelMapsEditor::LoadSettings()
 	{
 		auto& settings = m_pViewModel->GetSettings();
+		const bool bLevelLoaded = m_pViewModel->IsLevelLoaded();
 
 		const float loadedCellSize = Utils::ConvertUtils::QVariantToFloat(GetProjectProperty("JDKLevelMaps/CellSize"), settings.cellSize);
-		settings.cellSize = std::clamp(loadedCellSize, 0.1f, m_pViewModel->GetMaxCellSize());
+		settings.cellSize = bLevelLoaded ? std::clamp(loadedCellSize, 0.1f, m_pViewModel->GetMaxCellSize()) : std::max(0.1f, loadedCellSize);
 
 		const uint32 loadedTileSize = Utils::ConvertUtils::QVariantToUint32(GetProjectProperty("JDKLevelMaps/TileSize"), settings.tileSize);
-		settings.tileSize = std::clamp(loadedTileSize, static_cast<uint32>(1), m_pViewModel->CalculateMaxTileSize(settings.cellSize));
+		settings.tileSize = bLevelLoaded ? std::clamp(loadedTileSize, 1u, m_pViewModel->CalculateMaxTileSize(settings.cellSize)) : std::max(1u, loadedTileSize);
 
 		const uint8 compression = Utils::ConvertUtils::QVariantToUint8(GetProjectProperty("JDKLevelMaps/Compression"), static_cast<uint8>(settings.compression));
 		settings.compression = static_cast<Settings::ECompression>(std::clamp<uint8>(compression, 0, static_cast<uint8>(Settings::ECompression::LZ4Both)));

@@ -12,6 +12,8 @@ namespace JDKLevelMaps::FileSystem
 
 		void RecomputePath();
 
+		[[nodiscard]] bool IsLevelLoaded() const noexcept;
+
 		[[nodiscard]] std::optional<std::string> GetImagePath(const char* bakerId) const;
 		[[nodiscard]] std::optional<std::string> GetMapPath(const char* bakerId) const;
 

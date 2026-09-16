@@ -210,6 +210,7 @@ namespace JDKLevelMaps::ViewModels
 			m_operationThread.join();
 	}
 
+	bool CLevelMapsViewModel::IsLevelLoaded() const noexcept { return m_pPathResolver->IsLevelLoaded(); }
 	EOperationState CLevelMapsViewModel::GetCurrentOperationState() const noexcept { return m_currentState.Get(); }
 	Settings::SBakerSettings& CLevelMapsViewModel::GetSettings() noexcept { return *m_pBakerSettings; }
 	const Settings::SBakerSettings& CLevelMapsViewModel::GetSettings() const noexcept { return *m_pBakerSettings; }

@@ -61,7 +61,7 @@ namespace JDKLevelMaps::FileSystem::LFSFacade
 #if defined(JDK_CRYPAK_LFS_PATCH)
 		pos = gEnv->pCryPak->FTell64(pFile);
 #else
-		pos = static_cast<int64>(gEnv->pCryPak->FTell(pFile);
+		pos = static_cast<int64>(gEnv->pCryPak->FTell(pFile));
 #endif
 		CRY_ASSERT(pos >= 0, "[JDKLevelMaps] FTell returned error");
 		return pos >= 0 ? static_cast<uint64>(pos) : 0;
