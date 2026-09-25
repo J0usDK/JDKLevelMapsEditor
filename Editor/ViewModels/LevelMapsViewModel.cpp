@@ -43,6 +43,11 @@ namespace JDKLevelMaps::ViewModels
 		m_pPathResolver->RecomputePath();
 	}
 
+	void CLevelMapsViewModel::LevelUpdated()
+	{
+		RecomputePaths();
+	}
+
 	void CLevelMapsViewModel::CheckPreviewAvailability(EMapType mapType)
 	{
 		auto pBaker = m_pBakersRegistry->GetBaker(mapType);

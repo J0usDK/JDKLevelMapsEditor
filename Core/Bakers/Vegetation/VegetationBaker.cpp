@@ -50,7 +50,7 @@ namespace JDKLevelMaps::Bakers
 		if (!Utils::Common::TryAssign(mapData, totalBytes, 0))
 			return {};
 
-		const auto objects = JDKEditorSource::QueryVegetationInstances(
+		const auto objects = JDKEditorSource::CEditorVegetationSource::QueryVegetationInstances(
 			context.originX, context.originY,
 			context.originX + (context.gridWidth * context.cellSize),
 			context.originY + (context.gridHeight * context.cellSize),
@@ -84,7 +84,7 @@ namespace JDKLevelMaps::Bakers
 			const float relX = (object.pos.x - context.originX) * invCellSize;
 			const float relY = (object.pos.y - context.originY) * invCellSize;
 
-			if (!(relX >= 0.0f && relX < fGridWidth && relY >= 0.0f || relY < fGridHeight))
+			if (!(relX >= 0.0f && relX < fGridWidth && relY >= 0.0f && relY < fGridHeight))
 				continue;
 
 			const uint32 gridX = static_cast<uint32>(relX);

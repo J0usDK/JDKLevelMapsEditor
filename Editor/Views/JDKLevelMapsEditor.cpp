@@ -109,7 +109,7 @@ namespace JDKLevelMaps::Views
 	void CJDKLevelMapsEditor::UpdateLevelState(bool bLevelLoaded)
 	{
 		m_bLevelLoaded = bLevelLoaded;
-		m_pViewModel->RecomputePaths();
+		m_pViewModel->LevelUpdated();
 		m_pViewModel->CheckPreviewAvailability(GetActiveMapType());
 
 		if (bLevelLoaded)

@@ -7,6 +7,7 @@
 #include "Core/Data/RunResult.h"
 #include "Core/BakersRegistry.h"
 #include "Core/Bakers/IMapBaker.h"
+#include "Core/Bakers/Vegetation/EditorVegetationSource.h"
 #include "Core/FileSystem/PathResolver.h"
 #include "Core/MapWork/Write/MapFileWriter.h"
 #include "Core/ImageWork/Export/ImageExporter.h"

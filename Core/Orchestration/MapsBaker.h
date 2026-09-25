@@ -63,8 +63,6 @@ namespace JDKLevelMaps::Managers
 		static uint8 ResolveCompressBlocks(const Bakers::IMapBaker& baker, Settings::ECompression comp, uint32 tileSize, uint64 nonEmptyTilesCount) noexcept;
 		static ETileEntryFormat ResolveEntryFormat(const Bakers::IMapBaker& baker, const Data::SLevelContext& context, Settings::EDirectoryFormat dirFormat, uint64 nonEmptyTilesCount, uint8 compBlocksMask) noexcept;
 
-		SMapFormats ResolveMapFormats(const Bakers::IMapBaker& baker, const Data::SLevelContext& context) const noexcept;
-
 	private:
 		CBakersRegistry& m_bakersRegistry;
 		FileSystem::CPathResolver& m_pathResolver;

@@ -6,11 +6,6 @@ namespace JDKLevelMaps::Data
 	struct SLevelContext;
 }
 
-namespace JDKLevelMaps::MapLayers
-{
-	enum class EVegetationLayers : uint8;
-}
-
 namespace JDKLevelMaps::Settings
 {
 	struct SVegetationBakerSettings;

@@ -72,6 +72,7 @@ namespace JDKLevelMaps::ViewModels
 		[[nodiscard]] uint32 CalculateMaxTileSize(float cellSize) const noexcept;
 
 	public slots:
+		void LevelUpdated();
 		void StartBaking(EMapType mapType);
 		void StopBaking() noexcept;
 		void LoadPreviewFromMapAsync(EMapType mapType);

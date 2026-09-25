@@ -23,11 +23,16 @@ add_sources("JDKLevelMapsPlugin_Core_Bakers_uber.cpp"
 
 add_sources("JDKLevelMapsPlugin_Core_Bakers_Vegetation_uber.cpp"
 	SOURCE_GROUP "Core\\\\Bakers\\\\Vegetation"
-		"Core/Bakers/Vegetation/EditorVegetationSource.h"
-		"Core/Bakers/Vegetation/EditorVegetationSource.cpp"
 		"Core/Bakers/Vegetation/VegetationBaker.h"
 		"Core/Bakers/Vegetation/VegetationBaker.cpp"
+		"Core/Bakers/Vegetation/MockTerrain.h"
 		"Core/Bakers/Vegetation/VegetationClassifier.h"
+)
+
+add_sources("NoUberFile"
+	SOURCE_GROUP "Core\\\\Bakers\\\\Vegetation"
+		"Core/Bakers/Vegetation/EditorVegetationSource.h"
+		"Core/Bakers/Vegetation/EditorVegetationSource.cpp"
 )
 
 add_sources("JDKLevelMapsPlugin_Core_Data_uber.cpp"
@@ -189,5 +194,7 @@ CryEditorPlugin(JDKLevelMapsPlugin PCH "StdAfx.cpp" SOLUTION_FOLDER "Sandbox/Plu
 target_include_directories(${THIS_PROJECT} PRIVATE ".")
 
 target_link_libraries(${THIS_PROJECT} PRIVATE Sandbox)
+
 target_include_directories(${THIS_PROJECT} PRIVATE "${CRYENGINE_DIR}/Code/Sandbox/EditorQt")
+
 use_xt()
