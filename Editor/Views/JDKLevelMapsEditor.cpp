@@ -55,6 +55,7 @@ namespace JDKLevelMaps::Views
 			}
 			UpdateLevelState(false);
 			break;
+		case eNotify_OnEndNewScene:
 		case eNotify_OnEndLoad:
 			UpdateLevelState(true);
 			break;
