@@ -13,7 +13,7 @@ namespace JDKLevelMaps::Data
 
 namespace JDKLevelMaps::ImageWork
 {
-	struct SImageSizes { uint32 width, height; };
+	struct SImageSizes { uint32 width = 0, height = 0; };
 
 	struct SImageView;
 

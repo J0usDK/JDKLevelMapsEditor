@@ -27,21 +27,5 @@ namespace JDKLevelMaps::JDKEditorSource
 		SVegetationInstanceData(Vec3 pos, MapLayers::EVegetationLayers layer) noexcept : pos(pos), layer(layer) {}
 	};
 
-	class CEditorVegetationSource final
-	{
-	public:
-		[[nodiscard]] static std::vector<SVegetationInstanceData> QueryVegetationInstances(float x1, float y1, float x2, float y2, const Settings::SVegetationBakerSettings& settings);
-
-	private:
-		struct SProcVegContext;
-
-	private:
-		static void CollectProcVegetation(const std::vector<MapLayers::EVegetationLayers>& idxToLayer, std::vector<SVegetationInstanceData>& result);
-		static void ProcessTerrainNode(const Internal::CTerrainNode_Mock* pNode, const SProcVegContext& ctx, const std::vector<MapLayers::EVegetationLayers>& indexToLayer, std::vector<SVegetationInstanceData>& result);
-		
-		[[nodiscard]] static float GetSurfaceTypeAmountCustom(const SProcVegContext& ctx, const Vec3& vPos, uint8 ucGlobalSurfType);
-		[[nodiscard]] static float GetTerrainZFast(const SProcVegContext& ctx, float x, float y);
-
-		[[nodiscard]] static const std::vector<MapLayers::EVegetationLayers> BuildGroupLookup(CVegetationMap* pVegetationMap, const Settings::SVegetationBakerSettings& settings);
-	};
+	[[nodiscard]] std::vector<SVegetationInstanceData> QueryVegetationInstances(float x1, float y1, float x2, float y2, const Settings::SVegetationBakerSettings& settings);
 }

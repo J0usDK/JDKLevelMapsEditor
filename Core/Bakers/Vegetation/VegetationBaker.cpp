@@ -50,10 +50,9 @@ namespace JDKLevelMaps::Bakers
 		if (!Utils::Common::TryAssign(mapData, totalBytes, 0))
 			return {};
 
-		const auto objects = JDKEditorSource::CEditorVegetationSource::QueryVegetationInstances(
+		const auto objects = JDKEditorSource::QueryVegetationInstances(
 			context.originX, context.originY,
-			context.originX + (context.gridWidth * context.cellSize),
-			context.originY + (context.gridHeight * context.cellSize),
+			context.originX + (context.gridWidth * context.cellSize), context.originY + (context.gridHeight * context.cellSize),
 			m_settings);
 
 		uint8 layerToChannel[3]{ 0xFF, 0xFF, 0xFF };
