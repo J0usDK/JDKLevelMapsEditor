@@ -19,12 +19,13 @@ namespace JDKLevelMaps::ImageWork
 	{
 	public:
 		CImageDataSource() = delete;
-		explicit CImageDataSource(const std::vector<uint8>& data, uint32 width, uint32 channelsCount, uint8 channelsMask, Bakers::DebugColorMapperPtr mapper, Utils::Common::SProgressTask* pTask) noexcept
-			: m_data(data), m_width(width), m_channelsCount(channelsCount), m_channelsMask(channelsMask), m_colorMapper(mapper), m_pTask(pTask) { }
+		explicit CImageDataSource(const std::vector<uint8>& data, uint32 width, uint32 height, uint32 channelsCount, uint8 channelsMask, Bakers::DebugColorMapperPtr mapper, Utils::Common::SProgressTask* pTask) noexcept
+			: m_data(data), m_width(width), m_height(height), m_channelsCount(channelsCount), m_channelsMask(channelsMask), m_colorMapper(mapper), m_pTask(pTask) { }
 
 		bool FetchRowRGB(uint32 y, uint8* JDK_RESTRICT pOutRowRgb) noexcept override
 		{
-			const size_t rowOffset = static_cast<size_t>(y) * m_width * m_channelsCount;
+			const uint32 srcRow = m_height - 1 - y;
+			const size_t rowOffset = static_cast<size_t>(srcRow) * m_width * m_channelsCount;
 			const uint8* pRowData = m_data.data() + rowOffset;
 
 			const uint8* pPixel = pRowData;
@@ -55,6 +56,7 @@ namespace JDKLevelMaps::ImageWork
 		const std::vector<uint8>& m_data;
 
 		const uint32 m_width;
+		const uint32 m_height;
 		const uint32 m_channelsCount;
 		const uint8 m_channelsMask;
 
@@ -85,7 +87,7 @@ namespace JDKLevelMaps::ImageWork
 		if (!file)
 			return { false, "Disk I/O Error: Cannot open debug image file for writing" };
 
-		CImageDataSource dataSource(data, context.gridWidth, baker.GetChannelCount(), baker.GetActiveLayersMask(), baker.GetDebugColorMapper(), m_pImageTask);
+		CImageDataSource dataSource(data, context.gridWidth, context.gridHeight, baker.GetChannelCount(), baker.GetActiveLayersMask(), baker.GetDebugColorMapper(), m_pImageTask);
 
 		if (auto result = ImageWork::WritePNG(file, context.gridWidth, context.gridHeight, dataSource); !result.bSuccess)
 			return result;

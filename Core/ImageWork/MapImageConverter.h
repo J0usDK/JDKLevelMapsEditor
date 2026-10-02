@@ -38,7 +38,7 @@ namespace JDKLevelMaps::ImageWork::Converters
 
 		for (uint32 ly = 0; ly < maxLy; ++ly)
 		{
-			uchar* pLine = ctx.outImage.ScanLine(startGy + ly);
+			uchar* pLine = ctx.outImage.ScanLine(safeGridHeight - 1 - (startGy + ly));
 			uchar* pPixel = pLine + startGx * 3;
 
 			size_t localIndex = localRowStart;

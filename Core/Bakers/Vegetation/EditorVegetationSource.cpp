@@ -1,7 +1,9 @@
 #include "StdAfx.h"
 #include "EditorVegetationSource.h"
 
+#include <algorithm>
 #include <optional>
+#include <limits>
 #include <emmintrin.h>
 #include <IEditorImpl.h>
 #include <Cry3DEngine/I3DEngine.h>
@@ -20,7 +22,10 @@ namespace JDKLevelMaps::JDKEditorSource
 	namespace
 	{
 		constexpr float kFltMax = 3.402823466e+38F;
+		constexpr float kTerrainBottomLevel = 0;
 		constexpr float kThreshold = 0.00001f;
+
+		constexpr bool kJitterYDrawnBeforeX = true;
 
 		bool s_bProcVegUsed = false;
 		bool s_bLayoutValid = false;
@@ -35,10 +40,10 @@ namespace JDKLevelMaps::JDKEditorSource
 			[[nodiscard]] static SProcVegNodeBounds Create(const Internal::CTerrainNode_Mock& node)
 			{
 				SProcVegNodeBounds bounds;
-				float fSectorSize = (float)(gEnv->p3DEngine->GetTerrainSectorSize() << node.m_nTreeLevel);
+				float fSectorSize = static_cast<float>(gEnv->p3DEngine->GetTerrainSectorSize() << node.m_nTreeLevel);
 
-				bounds.fMinX = (float)node.m_nOriginX;
-				bounds.fMinY = (float)node.m_nOriginY;
+				bounds.fMinX = static_cast<float>(node.m_nOriginX);
+				bounds.fMinY = static_cast<float>(node.m_nOriginY);
 				bounds.fMaxX = bounds.fMinX + fSectorSize;
 				bounds.fMaxY = bounds.fMinY + fSectorSize;
 
@@ -51,6 +56,8 @@ namespace JDKLevelMaps::JDKEditorSource
 			float fMinSq = 0.0f;
 			float fMaxSq = kFltMax;
 
+			bool bActive = false;
+
 			[[nodiscard]] bool Contains(float value) const noexcept
 			{
 				return value >= fMinSq && value <= fMaxSq;
@@ -59,6 +66,7 @@ namespace JDKLevelMaps::JDKEditorSource
 			[[nodiscard]] static SSlopeRange Create(const IStatInstGroup& group, float fU2_4) noexcept
 			{
 				SSlopeRange range;
+				range.bActive = (group.fSlopeMin != 0.0f || group.fSlopeMax != 255.0f);
 
 				if (group.fSlopeMin > 0.0f)
 				{
@@ -98,6 +106,7 @@ namespace JDKLevelMaps::JDKEditorSource
 
 			int nProcVegMaxCacheLevels = 1;
 			int nProcVeg = 1;
+			int nMaxObjectsPerSector = std::numeric_limits<int>::max();
 
 			bool bNoRandomSeed = false;
 
@@ -127,8 +136,13 @@ namespace JDKLevelMaps::JDKEditorSource
 					ctx.nProcVegMaxCacheLevels = pCvar->GetIVal();
 				if (ICVar* pCvar = gEnv->pConsole->GetCVar("e_ProcVegetation"))
 					ctx.nProcVeg = pCvar->GetIVal();
-				if (ICVar* pCvar = gEnv->pConsole->GetCVar("bNoRandomSeed"))
-					ctx.bNoRandomSeed = pCvar->GetIVal() != 0;
+				if (ICVar* pCvar = gEnv->pConsole->GetCVar("e_ProcVegetationMaxObjectsPerSector"))
+					ctx.nMaxObjectsPerSector = pCvar->GetIVal();
+
+				if (ctx.nProcVeg < 1)
+					ctx.nProcVeg = 1;
+
+				ctx.bNoRandomSeed = gEnv->bNoRandomSeed;
 
 				return ctx;
 			}
@@ -149,7 +163,16 @@ namespace JDKLevelMaps::JDKEditorSource
 				IStatInstGroup group;
 				if (!gEnv->p3DEngine->GetStatInstGroup(nGroupId, group))
 					return std::nullopt;
+				
+				static bool s_bWarnedIdMismatch = false;
+				if (group.nID != nGroupId && !s_bWarnedIdMismatch)
+				{
+					s_bWarnedIdMismatch = true;
+					JDK_WARN("Vegetation group index %d has nID %d. Procedural vegetation may not match the engine for such groups.", nGroupId, group.nID);
+				}
 
+				if (!group.pStatObj)
+					return std::nullopt;
 				if (group.fSize <= 0.f)
 					return std::nullopt;
 				if (ctx.nProcVeg >= 3 && node.m_nTreeLevel != ctx.nProcVeg - 3)
@@ -219,11 +242,18 @@ namespace JDKLevelMaps::JDKEditorSource
 			return ctx.pGrid[secX * ctx.nGridSize + secY];
 		}
 
-		[[nodiscard]] float GetTerrainZFast(const SProcVegContext& ctx, float x, float y)
+		[[nodiscard]] float HeightLocal(const Internal::SRangeInfo_Mock& ri, int lx, int ly) noexcept
 		{
-			Vec2i units = WorldToTerrainUnits(ctx, x, y);
-			const auto* pNode = GetNodeAtUnits(ctx, units);
+			const uint32 idx = static_cast<uint32>(lx) * ri.nSize + static_cast<uint32>(ly);
+			return ri.fOffset + static_cast<float>(ri.pHMData[idx].height) * ri.fRange;
+		}
 
+		[[nodiscard]] float GetTerrainZUnits(const SProcVegContext& ctx, int unitX, int unitY)
+		{
+			unitX = std::clamp(unitX, 0, ctx.nTerrainUnits - 1);
+			unitY = std::clamp(unitY, 0, ctx.nTerrainUnits - 1);
+
+			const auto* pNode = GetNodeAtUnits(ctx, Vec2i(unitX, unitY));
 			if (!pNode || !pNode->m_rangeInfo.pHMData)
 				return 0.0f;
 
@@ -231,36 +261,55 @@ namespace JDKLevelMaps::JDKEditorSource
 			int nMask = ri.nSize - 2;
 
 			if (ri.nUnitBitShift == 0)
-			{
-				int localX = units.x & nMask;
-				int localY = units.y & nMask;
-				uint32 idx = localX * ri.nSize + localY;
-				return ri.fOffset + (float)(ri.pHMData[idx].height) * ri.fRange;
-			}
-			else
-			{
-				float fInvStep = (ri.nSize > 1) ? (1.f / ((1 << ctx.nUnitsToSectorBitShift) / (ri.nSize - 1))) : 1.f;
+				return HeightLocal(ri, unitX & nMask, unitY & nMask);
+			
 
-				int nX = units.x >> ri.nUnitBitShift;
-				int nY = units.y >> ri.nUnitBitShift;
+			float fInvStep = (ri.nSize > 1) ? (1.f / ((1 << ctx.nUnitsToSectorBitShift) / (ri.nSize - 1))) : 1.f;
 
-				float fX = (units.x * fInvStep) - nX;
-				float fY = (units.y * fInvStep) - nY;
+			int nX = unitX >> ri.nUnitBitShift;
+			int nY = unitY >> ri.nUnitBitShift;
 
-				nX &= nMask;
-				nY &= nMask;
+			float fX = (unitX * fInvStep) - nX;
+			float fY = (unitY * fInvStep) - nY;
 
-				auto getHeight = [&ri](int lx, int ly) -> float
-				{
-					uint32 idx = lx * ri.nSize + ly;
-					return ri.fOffset + static_cast<float>(ri.pHMData[idx].height) * ri.fRange;
-				};
+			nX &= nMask;
+			nY &= nMask;
 
-				return getHeight(nX, nY) * (1.f - fX) * (1.f - fY) +
-					getHeight(nX + 1, nY) * fX * (1.f - fY) +
-					getHeight(nX, nY + 1) * (1.f - fX) * fY +
-					getHeight(nX + 1, nY + 1) * fX * fY;
-			}
+			return HeightLocal(ri, nX, nY) * (1.f - fX) * (1.f - fY) +
+				HeightLocal(ri, nX + 1, nY) * fX * (1.f - fY) +
+				HeightLocal(ri, nX, nY + 1) * (1.f - fX) * fY +
+				HeightLocal(ri, nX + 1, nY + 1) * fX * fY;
+		}
+
+		[[nodiscard]] float GetTerrainZFast(const SProcVegContext& ctx, float x, float y)
+		{
+			const Vec2i units = WorldToTerrainUnits(ctx, x, y);
+			return GetTerrainZUnits(ctx, units.x, units.y);
+		}
+
+		[[nodiscard]] float GetTerrainZApr(const SProcVegContext& ctx, float x, float y)
+		{
+			const float uX = x * ctx.fInvUnitSize;
+			const float uY = y * ctx.fInvUnitSize;
+
+			const int nX = static_cast<int>(uX);
+			const int nY = static_cast<int>(uY);
+
+			if (!(x > 0.0f && y > 0.0f) || nX < 0 || nY < 0 || nX >= ctx.nTerrainUnits || nY >= ctx.nTerrainUnits)
+				return kTerrainBottomLevel;
+
+			const float fX = uX - nX;
+			const float fY = uY - nY;
+
+			const float z00 = GetTerrainZUnits(ctx, nX, nY);
+			const float z10 = GetTerrainZUnits(ctx, nX + 1, nY);
+			const float z01 = GetTerrainZUnits(ctx, nX, nY + 1);
+
+			if (fX + fY < 1.f)
+				return z00 * (1.f - fX - fY) + z10 * fX + z01 * fY;
+
+			const float z11 = GetTerrainZUnits(ctx, nX + 1, nY + 1);
+			return z11 * (fX + fY - 1.f) + z01 * (1.f - fX) + z10 * (1.f - fY);
 		}
 
 		[[nodiscard]] std::vector<MapLayers::EVegetationLayers> BuildGroupLookup(CVegetationMap* pVegetationMap, const Settings::SVegetationBakerSettings& settings)
@@ -292,7 +341,7 @@ namespace JDKLevelMaps::JDKEditorSource
 					continue;
 
 				const int idx = pObj->GetId();
-				if (idx < 0 || idx >= (int)result.size())
+				if (idx < 0 || idx >= static_cast<int>(result.size()))
 					continue;
 
 				const auto layer = Categories::Vegetation::ClassifyGroup(pObj->GetGroup(), settings);
@@ -405,13 +454,18 @@ namespace JDKLevelMaps::JDKEditorSource
 				return GetSurfaceTypeAmountScalar(t00, t01, t10, t11, ucGlobalSurfType, fDX, fDY);
 		}
 
-		void GenerateGroupInstances(const SProcVegContext& ctx, const Internal::SSurfaceType_Mock& surface, const SProcVegGroupParams& params, const SProcVegNodeBounds& bounds, CMTRand_int32& rndGen, std::vector<SVegetationInstanceData>& result)
+		[[nodiscard]] bool GenerateGroupInstances(const SProcVegContext& ctx, const Internal::SSurfaceType_Mock& surface, const SProcVegGroupParams& params, const SProcVegNodeBounds& bounds, CMTRand_int32& rndGen, bool bEmit, int& nInstancesCounter, std::vector<SVegetationInstanceData>& result)
 		{
 			for (float fX = bounds.fMinX + params.fOffset; fX < bounds.fMaxX; fX += params.fDensity)
 			{
 				for (float fY = bounds.fMinY + params.fOffset; fY < bounds.fMaxY; fY += params.fDensity)
 				{
-					Vec3 vPos(fX + (rndGen.GenerateFloat() - 0.5f) * params.fDensity, fY + (rndGen.GenerateFloat() - 0.5f) * params.fDensity, 0);
+					const float fDrawFirst = rndGen.GenerateFloat();
+					const float fDrawSecond = rndGen.GenerateFloat();
+					const float fJitterX = kJitterYDrawnBeforeX ? fDrawSecond : fDrawFirst;
+					const float fJitterY = kJitterYDrawnBeforeX ? fDrawFirst : fDrawSecond;
+
+					Vec3 vPos(fX + (fJitterX - 0.5f) * params.fDensity, fY + (fJitterY - 0.5f) * params.fDensity, 0.0f);
 					vPos.x = clamp_tpl(vPos.x, bounds.fMinX, bounds.fMaxX);
 					vPos.y = clamp_tpl(vPos.y, bounds.fMinY, bounds.fMaxY);
 
@@ -419,7 +473,7 @@ namespace JDKLevelMaps::JDKEditorSource
 					if (fSurfaceTypeAmount <= 0.5f)
 						continue;
 
-					vPos.z = GetTerrainZFast(ctx, vPos.x, vPos.y);
+					vPos.z = GetTerrainZApr(ctx, vPos.x, vPos.y);
 
 					if (vPos.x < 0.f || vPos.x >= ctx.fTerrainSize || vPos.y < 0.f || vPos.y >= ctx.fTerrainSize)
 						continue;
@@ -431,16 +485,19 @@ namespace JDKLevelMaps::JDKEditorSource
 					if (vPos.z < params.group.fElevationMin || vPos.z > params.group.fElevationMax)
 						continue;
 
-					float sx = 0.0f, sy = 0.0f;
+					if (params.slope.bActive)
+					{
+						float sx = 0.0f, sy = 0.0f;
 
-					if ((fX + ctx.fTerrainUnitSize) < ctx.fTerrainSize && fX >= ctx.fTerrainUnitSize)
-						sx = GetTerrainZFast(ctx, fX + ctx.fTerrainUnitSize, fY) - GetTerrainZFast(ctx, fX - ctx.fTerrainUnitSize, fY);
-					if ((fY + ctx.fTerrainUnitSize) < ctx.fTerrainSize && fY >= ctx.fTerrainUnitSize)
-						sy = GetTerrainZFast(ctx, fX, fY + ctx.fTerrainUnitSize) - GetTerrainZFast(ctx, fX, fY - ctx.fTerrainUnitSize);
+						if ((fX + ctx.fTerrainUnitSize) < ctx.fTerrainSize && fX >= ctx.fTerrainUnitSize)
+							sx = GetTerrainZFast(ctx, fX + ctx.fTerrainUnitSize, fY) - GetTerrainZFast(ctx, fX - ctx.fTerrainUnitSize, fY);
+						if ((fY + ctx.fTerrainUnitSize) < ctx.fTerrainSize && fY >= ctx.fTerrainUnitSize)
+							sy = GetTerrainZFast(ctx, fX, fY + ctx.fTerrainUnitSize) - GetTerrainZFast(ctx, fX, fY - ctx.fTerrainUnitSize);
 
-					float fGradSq = (sx * sx) + (sy * sy);
-					if (!params.slope.Contains(fGradSq))
-						continue;
+						float fGradSq = (sx * sx) + (sy * sy);
+						if (!params.slope.Contains(fGradSq))
+							continue;
+					}
 
 					if (params.group.fVegRadius * fScale < ctx.fVegMinSize)
 						continue;
@@ -448,15 +505,47 @@ namespace JDKLevelMaps::JDKEditorSource
 					// Keep the RNG sequence in sync with the original engine implementation.
 					const uint32 angleRnd = rndGen.GenerateUint32();
 
-					result.emplace_back(vPos, params.layer);
+					if (bEmit)
+						result.emplace_back(vPos, params.layer);
+
+					if (++nInstancesCounter >= ctx.nMaxObjectsPerSector)
+						return false;
 				}
 			}
+
+			return true;
+		}
+
+		[[nodiscard]] bool IsBakedGroup(int nGroupId, const std::vector<MapLayers::EVegetationLayers>& idxToLayer) noexcept
+		{
+			return nGroupId >= 0 && nGroupId < static_cast<int>(idxToLayer.size()) && idxToLayer[nGroupId] != MapLayers::EVegetationLayers::Unknown;
 		}
 
 		void ProcessTerrainNode(const Internal::CTerrainNode_Mock& node, const SProcVegContext& ctx, const std::vector<MapLayers::EVegetationLayers>& idxToLayer, std::vector<SVegetationInstanceData>& result)
 		{
+			int nLastBakedPos = -1;
+			{
+				int nPos = 0;
+				for (int nLayer = 0; nLayer < node.m_lstSurfaceTypeInfo.Count(); nLayer++)
+				{
+					const Internal::SSurfaceType_Mock* pSurface = node.m_lstSurfaceTypeInfo[nLayer].pSurfaceType;
+					if (!pSurface)
+						continue;
+
+					for (int g = 0; g < pSurface->lstnVegetationGroups.Count(); g++, nPos++)
+						if (IsBakedGroup(pSurface->lstnVegetationGroups[g], idxToLayer))
+							nLastBakedPos = nPos;
+				}
+			}
+
+			if (nLastBakedPos < 0)
+				return;
+
 			CMTRand_int32 rndGen(ctx.bNoRandomSeed ? 0 : node.m_nOriginX + node.m_nOriginY);
 			SProcVegNodeBounds nodeBounds = SProcVegNodeBounds::Create(node);
+
+			int nInstancesCounter = 0;
+			int nPos = 0;
 
 			for (int nLayer = 0; nLayer < node.m_lstSurfaceTypeInfo.Count(); nLayer++)
 			{
@@ -464,21 +553,24 @@ namespace JDKLevelMaps::JDKEditorSource
 				if (!pSurface)
 					continue;
 
-				for (int g = 0; g < pSurface->lstnVegetationGroups.Count(); g++)
+				for (int g = 0; g < pSurface->lstnVegetationGroups.Count(); g++, nPos++)
 				{
-					int nGroupId = pSurface->lstnVegetationGroups[g];
-					if (nGroupId < 0 || nGroupId >= (int)idxToLayer.size())
+					if (nPos > nLastBakedPos)
+						return;
+
+					const int nGroupId = pSurface->lstnVegetationGroups[g];
+					if (nGroupId < 0)
 						continue;
 
-					auto layer = idxToLayer[nGroupId];
-					if (layer == MapLayers::EVegetationLayers::Unknown)
-						continue;
+					const bool bEmit = IsBakedGroup(nGroupId, idxToLayer);
+					const auto layer = bEmit ? idxToLayer[nGroupId] : MapLayers::EVegetationLayers::Unknown;
 
 					auto params = SProcVegGroupParams::TryCreate(ctx, node, layer, nGroupId);
 					if (!params)
 						continue;
 
-					GenerateGroupInstances(ctx, *pSurface, *params, nodeBounds, rndGen, result);
+					if (!GenerateGroupInstances(ctx, *pSurface, *params, nodeBounds, rndGen, bEmit, nInstancesCounter, result))
+						return; // limit reached
 				}
 			}
 		}
@@ -500,7 +592,9 @@ namespace JDKLevelMaps::JDKEditorSource
 
 			SProcVegContext ctx = SProcVegContext::Create(level0.m_pData, level0.m_nSize);
 
-			for (int level = 0; level < pTerrain->m_arrSecInfoPyramid.m_nCount; level++)
+			const int nLevelsToProcess = std::min(pTerrain->m_arrSecInfoPyramid.m_nCount, ctx.nProcVegMaxCacheLevels);
+
+			for (int level = 0; level < nLevelsToProcess; level++)
 			{
 				const auto& levelGrid = pTerrain->m_arrSecInfoPyramid.m_pElements[level];
 				if (!levelGrid.m_pData || levelGrid.m_nSize <= 0)
@@ -541,7 +635,7 @@ namespace JDKLevelMaps::JDKEditorSource
 		if (!pVegetationMap)
 			return {};
 
-		const auto& indexToLayer = BuildGroupLookup(pVegetationMap, settings);
+		const auto& idxToLayer = BuildGroupLookup(pVegetationMap, settings);
 
 		std::vector<CVegetationInstance*> instances;
 		pVegetationMap->GetObjectInstances(x1, y1, x2, y2, instances);
@@ -556,10 +650,10 @@ namespace JDKLevelMaps::JDKEditorSource
 
 			const int idx = pInstance->object->GetId();
 
-			if (idx < 0 || idx >= (int)indexToLayer.size())
+			if (idx < 0 || idx >= static_cast<int>(idxToLayer.size()))
 				continue;
 
-			const auto layer = indexToLayer[idx];
+			const auto layer = idxToLayer[idx];
 			if (layer != MapLayers::EVegetationLayers::Unknown)
 				result.emplace_back(pInstance->pos, layer);
 		}
@@ -570,7 +664,7 @@ namespace JDKLevelMaps::JDKEditorSource
 				s_bLayoutValid = Internal::ValidateMockLayout();
 
 			if (s_bLayoutValid)
-				CollectProcVegetation(indexToLayer, result);
+				CollectProcVegetation(idxToLayer, result);
 			else
 				JDK_WARN("Found layout discrepancies. Procedural Vegetation has been disabled.\n"
 					"Check the engine version and update the mocked structures and classes.");

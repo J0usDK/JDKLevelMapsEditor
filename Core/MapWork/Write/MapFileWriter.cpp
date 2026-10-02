@@ -28,8 +28,7 @@ namespace JDKLevelMaps::MapWork
 			return { false, "Internal Error: Map Writer is not ready" };
 
 		InitProgressTasks(context, pProgressor);
-
-		Utils::FileSystem::ScopedCryFile file(FileSystem::LFSFacade::FOpen(m_writeContext.mapPath.c_str(), "wb", true), m_writeContext.mapPath.c_str());
+		Utils::FileSystem::ScopedCryFile file(FileSystem::LFSFacade::FOpen(m_writeContext.mapPath.c_str(), "wb", FileSystem::LFSFacade::IsPatched()), m_writeContext.mapPath.c_str());
 		if (!file)
 			return { false, "Disk I/O Error: Cannot open map file for writing" };
 
