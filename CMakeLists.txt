@@ -138,6 +138,8 @@ add_sources("JDKLevelMapsPlugin_Editor_Components_uber.cpp"
 		"Editor/Components/MapPreview.cpp"
 		"Editor/Components/GenerateButton.h"
 		"Editor/Components/GenerateButton.cpp"
+		"Editor/Components/CoordinateAxes.h"
+		"Editor/Components/CoordinateAxes.cpp"
 )
 
 add_sources("JDKLevelMapsPlugin_Settings_uber.cpp"

@@ -1,6 +1,8 @@
 #pragma once
 #include <QLabel>
 
+#include "CoordinateAxes.h"
+
 namespace JDKLevelMaps::Components
 {
 	class CGenerateButton;
@@ -36,9 +38,12 @@ namespace JDKLevelMaps::Components
 		void ResetView() noexcept;
 		void ClampOffset() noexcept;
 		[[nodiscard]] float GetMaxZoom() const noexcept;
+		[[nodiscard]] QRectF GetViewportRect() const;
 
 	private:
 		QPixmap m_pixmap;
+		CCoordinateAxes m_axes;
+
 		bool m_bHasPixmap = false;
 		float m_zoomFactor = 1.0f;
 

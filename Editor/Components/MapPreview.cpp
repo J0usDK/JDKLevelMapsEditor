@@ -71,17 +71,24 @@ namespace JDKLevelMaps::Components
 		QPainter painter(this);
 		painter.setRenderHint(QPainter::SmoothPixmapTransform, m_zoomFactor <= 1.0f);
 
+		const QRectF viewport = GetViewportRect();
+
 		QSizeF targetSize = m_pixmap.size();
-		targetSize.scale(size(), Qt::KeepAspectRatio);
+		targetSize.scale(viewport.size(), Qt::KeepAspectRatio);
 		targetSize *= m_zoomFactor;
 
 		QRectF targetRect(
-			(width() - targetSize.width()) / 2.0f + m_offset.x(),
-			(height() - targetSize.height()) / 2.0f + m_offset.y(),
+			viewport.center().x() - targetSize.width() / 2.0f + m_offset.x(),
+			viewport.center().y() - targetSize.height() / 2.0f + m_offset.y(),
 			targetSize.width(),
 			targetSize.height());
 
+		painter.save();
+		painter.setClipRect(viewport);
 		painter.drawPixmap(targetRect, m_pixmap, m_pixmap.rect());
+		painter.restore();
+
+		m_axes.Paint(painter, viewport, palette());
 	}
 
 	void CMapPreview::resizeEvent(QResizeEvent* pEvent)
@@ -167,12 +174,12 @@ namespace JDKLevelMaps::Components
 					m_offset = {};
 				else
 				{
-					QPointF mousePos = pEvent->posF();
-					QPointF widgetCenter(width() / 2.0f, height() / 2.0f);
-					QPointF vectorToMouse = mousePos - (widgetCenter + m_offset);
+					const QPointF mousePos = pEvent->posF();
+					const QPointF viewportCenter = GetViewportRect().center();
+					const QPointF vectorToMouse = mousePos - (viewportCenter + m_offset);
 
 					float ratio = m_zoomFactor / oldZoom;
-					m_offset = mousePos - widgetCenter - (vectorToMouse * ratio);
+					m_offset = mousePos - viewportCenter - (vectorToMouse * ratio);
 
 					ClampOffset();
 				}
@@ -199,12 +206,14 @@ namespace JDKLevelMaps::Components
 		if (m_pixmap.isNull())
 			return;
 
+		const QRectF viewport = GetViewportRect();
+
 		QSizeF targetSize = m_pixmap.size();
-		targetSize.scale(size(), Qt::KeepAspectRatio);
+		targetSize.scale(viewport.size(), Qt::KeepAspectRatio);
 		targetSize *= m_zoomFactor;
 
-		const double halfWidgetWidth = width() * 0.5;
-		const double halfWidgetHeight = height() * 0.5;
+		const double halfWidgetWidth = viewport.width() * 0.5;
+		const double halfWidgetHeight = viewport.height() * 0.5;
 
 		const double halfImageWidth = targetSize.width() * 0.5;
 		const double halfImageHeight = targetSize.height() * 0.5;
@@ -224,5 +233,13 @@ namespace JDKLevelMaps::Components
 		const int maxDimension = std::max(m_pixmap.width(), m_pixmap.height());
 
 		return std::clamp(static_cast<float>(maxDimension) / 1024.0f * 4.0f, 16.0f, 128.0f);
+	}
+
+	QRectF CMapPreview::GetViewportRect() const
+	{
+		if (m_pixmap.isNull())
+			return rect();
+
+		return rect().marginsRemoved(m_axes.CalculateMargins(fontMetrics()));
 	}
 }
