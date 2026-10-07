@@ -9,6 +9,7 @@ namespace JDKLevelMaps::Data
 		int32 gridWidth = 0;
 		int32 gridHeight = 0;
 		float cellSize = 1.0f;
+		float invCellSize = 0.1f;
 		float originX = 0.0f;
 		float originY = 0.0f;
 	};
@@ -29,6 +30,7 @@ namespace JDKLevelMaps::Data
 
 		SLevelContext context;
 		context.cellSize = cellSize;
+		context.invCellSize = 1.0f / cellSize;
 		context.tileSize = tileSize;
 		context.gridWidth = gridSize;
 		context.gridHeight = gridSize;

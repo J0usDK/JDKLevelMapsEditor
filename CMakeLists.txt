@@ -21,18 +21,29 @@ add_sources("JDKLevelMapsPlugin_Core_Bakers_uber.cpp"
 		"Core/Bakers/IMapBaker.h"
 )
 
+add_sources("JDKLevelMapsPlugin_Core_Bakers_Footprint.cpp"
+	SOURCE_GROUP "Core\\\\Bakers\\\\Footprint"
+		"Core/Bakers/Footprint/FootprintMask.h"
+		"Core/Bakers/Footprint/FootprintMask.cpp"
+		"Core/Bakers/Footprint/FootprintBuilder.h"
+		"Core/Bakers/Footprint/FootprintBuilder.cpp"
+)
+
 add_sources("JDKLevelMapsPlugin_Core_Bakers_Vegetation_uber.cpp"
 	SOURCE_GROUP "Core\\\\Bakers\\\\Vegetation"
 		"Core/Bakers/Vegetation/VegetationBaker.h"
 		"Core/Bakers/Vegetation/VegetationBaker.cpp"
-		"Core/Bakers/Vegetation/MockTerrain.h"
 		"Core/Bakers/Vegetation/VegetationClassifier.h"
+		"Core/Bakers/Vegetation/VegetationData.h"
 )
 
 add_sources("NoUberFile"
 	SOURCE_GROUP "Core\\\\Bakers\\\\Vegetation"
 		"Core/Bakers/Vegetation/EditorVegetationSource.h"
 		"Core/Bakers/Vegetation/EditorVegetationSource.cpp"
+		"Core/Bakers/Vegetation/ProcVegGenerator.h"
+		"Core/Bakers/Vegetation/ProcVegGenerator.cpp"
+		"Core/Bakers/Vegetation/MockTerrain.h"
 )
 
 add_sources("JDKLevelMapsPlugin_Core_Data_uber.cpp"

@@ -8,6 +8,7 @@
 
 class QSpinBox;
 class QCheckBox;
+class QComboBox;
 class QLineEdit;
 
 namespace JDKLevelMaps
@@ -47,6 +48,8 @@ namespace JDKLevelMaps::Views
 		Settings::SVegetationBakerSettings m_settings;
 
 		QSpinBox* m_pSensitivitySpinBox = nullptr;
+		QCheckBox* m_pSimulateSizeCheckBox = nullptr;
+		QComboBox* m_pSizeMethodComboBox = nullptr;
 		QCheckBox* m_pGrassCheckBox = nullptr;
 		QCheckBox* m_pBushCheckBox = nullptr;
 		QCheckBox* m_pTreeCheckBox = nullptr;
