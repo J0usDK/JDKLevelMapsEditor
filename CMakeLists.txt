@@ -21,12 +21,14 @@ add_sources("JDKLevelMapsPlugin_Core_Bakers_uber.cpp"
 		"Core/Bakers/IMapBaker.h"
 )
 
-add_sources("JDKLevelMapsPlugin_Core_Bakers_Footprint.cpp"
-	SOURCE_GROUP "Core\\\\Bakers\\\\Footprint"
-		"Core/Bakers/Footprint/FootprintMask.h"
-		"Core/Bakers/Footprint/FootprintMask.cpp"
-		"Core/Bakers/Footprint/FootprintBuilder.h"
-		"Core/Bakers/Footprint/FootprintBuilder.cpp"
+add_sources("JDKLevelMapsPlugin_Core_Bakers_Geometry.cpp"
+	SOURCE_GROUP "Core\\\\Bakers\\\\Geometry"
+		"Core/Bakers/Geometry/GroupGeometry.h"
+		"Core/Bakers/Geometry/GroupGeometry.cpp"
+		"Core/Bakers/Geometry/GeometryBuilder.h"
+		"Core/Bakers/Geometry/GeometryBuilder.cpp"
+		"Core/Bakers/Geometry/InstanceTransform.h"
+		"Core/Bakers/Geometry/InstanceTransform.cpp"
 )
 
 add_sources("JDKLevelMapsPlugin_Core_Bakers_Vegetation_uber.cpp"

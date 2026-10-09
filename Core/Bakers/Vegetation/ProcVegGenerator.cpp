@@ -15,6 +15,7 @@
 #include "MockTerrain.h"
 #include "VegetationData.h"
 #include "Core/Data/Common.h"
+#include "Core/Bakers/Geometry/InstanceTransform.h"
 #include "Utils/Logger.h"
 
 namespace JDKLevelMaps::JDKEditorSource::Internal
@@ -89,8 +90,9 @@ namespace JDKLevelMaps::JDKEditorSource::Internal
 
 			bool bHasSSE2 = false;
 			bool bNoRandomSeed = false;
+			bool bCalcPlanTransform = false;
 
-			[[nodiscard]] static SProcVegContext Create(const CTerrainNode_Mock* const* pGridData, int nSize)
+			[[nodiscard]] static SProcVegContext Create(const CTerrainNode_Mock* const* pGridData, int nSize, bool bSimulateSize)
 			{
 				SProcVegContext ctx;
 				ctx.pGrid = pGridData;
@@ -125,6 +127,7 @@ namespace JDKLevelMaps::JDKEditorSource::Internal
 
 				ctx.bHasSSE2 = JDK::Math::GetCpuFeatures().bHasSSE2;
 				ctx.bNoRandomSeed = gEnv->bNoRandomSeed;
+				ctx.bCalcPlanTransform = bSimulateSize;
 
 				return ctx;
 			}
@@ -142,7 +145,7 @@ namespace JDKLevelMaps::JDKEditorSource::Internal
 
 			SSlopeRange slope;
 
-			[[nodiscard]] static std::optional<SProcVegGroupParams> TryCreate(const SProcVegContext& ctx, const CTerrainNode_Mock& node, MapLayers::EVegetationLayers layer, int nGroupId)
+			[[nodiscard]] static std::optional<SProcVegGroupParams> TryCreate(const SProcVegContext& ctx, const CTerrainNode_Mock& node, MapLayers::EVegetationLayers layer, const SGroupVegParams& vegParams, int nGroupId)
 			{
 				IStatInstGroup group;
 				if (!gEnv->p3DEngine->GetStatInstGroup(nGroupId, group))
@@ -162,9 +165,16 @@ namespace JDKLevelMaps::JDKEditorSource::Internal
 				if (ctx.nProcVeg >= 3 && node.m_nTreeLevel != ctx.nProcVeg - 3)
 					return std::nullopt;
 
-				SProcVegGroupParams params;
-				params.group = group;
-				params.layer = layer;
+				group.fAlignToTerrainCoefficient = vegParams.alignToTerrain;
+				group.bRandomRotation = vegParams.bRandomRotation;
+				group.nRotationRangeToTerrainNormal = vegParams.rotationRange;
+				group.fVegRadiusVert = group.pStatObj->GetRadiusVert();
+				group.fVegRadiusHor = group.pStatObj->GetRadiusHors();
+				group.fVegRadius = std::max(group.fVegRadiusVert, group.fVegRadiusHor);
+
+				SProcVegGroupParams procParams;
+				procParams.group = group;
+				procParams.layer = layer;
 
 				const float sectorSize = static_cast<float>(gEnv->p3DEngine->GetTerrainSectorSize() << node.m_nTreeLevel);
 
@@ -180,18 +190,18 @@ namespace JDKLevelMaps::JDKEditorSource::Internal
 				const float minX = static_cast<float>(node.m_nOriginX);
 				const float maxX = minX + sectorSize;
 
-				params.fDensity = group.fDensity < 0.5f ? 0.5f : group.fDensity;
+				procParams.fDensity = group.fDensity < 0.5f ? 0.5f : group.fDensity;
 
-				const float gridSize = floor((maxX - minX) / params.fDensity);
+				const float gridSize = floor((maxX - minX) / procParams.fDensity);
 				if (gridSize <= 0.0f)
 					return std::nullopt;
 
-				params.fDensity = (maxX - minX) / gridSize;
-				params.fOffset = params.fDensity * 0.5f;
-				params.nGroupId = nGroupId;
-				params.slope = SSlopeRange::Create(group, ctx.fU2_4);
+				procParams.fDensity = (maxX - minX) / gridSize;
+				procParams.fOffset = procParams.fDensity * 0.5f;
+				procParams.nGroupId = nGroupId;
+				procParams.slope = SSlopeRange::Create(group, ctx.fU2_4);
 
-				return params;
+				return procParams;
 			}
 		};
 	}
@@ -470,8 +480,14 @@ namespace JDKLevelMaps::JDKEditorSource::Internal
 
 					if (bEmit)
 					{
-						const float fAngle = static_cast<float>(CalculateAngleByte(params.group, pos, angleRnd)) * kAngleByteToRadians;
-						result.emplace_back(pos, static_cast<uint16>(params.nGroupId), fScale, fAngle, params.layer);
+						SPlanTransform plan;
+						if (ctx.bCalcPlanTransform)
+						{
+							const float fAngle = static_cast<float>(CalculateAngleByte(params.group, pos, angleRnd)) * kAngleByteToRadians;
+							plan = Geometry::CalculateInstancePlanTransform(pos, fScale, fAngle, 0.0f, 0.0f, params.group.fAlignToTerrainCoefficient);
+						}
+
+						result.emplace_back(pos, static_cast<uint16>(params.nGroupId), plan, params.layer);
 					}
 
 					if (++nInstancesCounter >= ctx.nMaxObjectsPerSector)
@@ -487,7 +503,7 @@ namespace JDKLevelMaps::JDKEditorSource::Internal
 			return nGroupId >= 0 && nGroupId < static_cast<int>(idxToLayer.size()) && idxToLayer[nGroupId] != MapLayers::EVegetationLayers::Unknown;
 		}
 
-		void ProcessTerrainNode(const CTerrainNode_Mock& node, const SProcVegContext& ctx, const std::vector<MapLayers::EVegetationLayers>& idxToLayer, std::vector<SVegetationInstanceData>& result)
+		void ProcessTerrainNode(const CTerrainNode_Mock& node, const SProcVegContext& ctx, const std::vector<MapLayers::EVegetationLayers>& idxToLayer, const std::vector<SGroupVegParams>& idxToGroupParams, std::vector<SVegetationInstanceData>& result)
 		{
 			int nLastBakedPos = -1;
 			{
@@ -531,11 +547,14 @@ namespace JDKLevelMaps::JDKEditorSource::Internal
 					const bool bEmit = IsBakedGroup(nGroupId, idxToLayer);
 					const auto layer = bEmit ? idxToLayer[nGroupId] : MapLayers::EVegetationLayers::Unknown;
 
-					auto params = SProcVegGroupParams::TryCreate(ctx, node, layer, nGroupId);
-					if (!params)
+					static const SGroupVegParams kDefaultParams{};
+					const SGroupVegParams& vegParams = (nGroupId >= 0 && nGroupId < static_cast<int>(idxToGroupParams.size())) ? idxToGroupParams[nGroupId] : kDefaultParams;
+
+					auto procParams = SProcVegGroupParams::TryCreate(ctx, node, layer, vegParams, nGroupId);
+					if (!procParams)
 						continue;
 
-					if (!GenerateGroupInstances(ctx, *pSurface, *params, nodeBounds, rndGen, bEmit, nInstancesCounter, result))
+					if (!GenerateGroupInstances(ctx, *pSurface, *procParams, nodeBounds, rndGen, bEmit, nInstancesCounter, result))
 						return; // limit reached
 				}
 			}
@@ -547,7 +566,7 @@ namespace JDKLevelMaps::JDKEditorSource::Internal
 		return ValidateMockLayout();
 	}
 
-	void GenerateProcVeg(const std::vector<MapLayers::EVegetationLayers>& idxToLayer, std::vector<SVegetationInstanceData>& result)
+	void GenerateProcVeg(const std::vector<MapLayers::EVegetationLayers>& idxToLayer, const std::vector<SGroupVegParams>& idxToGroupParams, bool bSimulateSize, std::vector<SVegetationInstanceData>& result)
 	{
 		ITerrain* pITerrain = gEnv->p3DEngine->GetITerrain();
 		if (!pITerrain)
@@ -561,7 +580,7 @@ namespace JDKLevelMaps::JDKEditorSource::Internal
 		if (!level0.m_pData || level0.m_nSize <= 0)
 			return;
 
-		SProcVegContext ctx = SProcVegContext::Create(level0.m_pData, level0.m_nSize);
+		SProcVegContext ctx = SProcVegContext::Create(level0.m_pData, level0.m_nSize, bSimulateSize);
 
 		const int levelsToProcess = std::min(pTerrain->m_arrSecInfoPyramid.m_nCount, ctx.nProcVegMaxCacheLevels);
 		for (int level = 0; level < levelsToProcess; level++)
@@ -580,7 +599,7 @@ namespace JDKLevelMaps::JDKEditorSource::Internal
 
 				__try
 				{
-					ProcessTerrainNode(*pNode, ctx, idxToLayer, result);
+					ProcessTerrainNode(*pNode, ctx, idxToLayer, idxToGroupParams, result);
 				}
 				__except (EXCEPTION_EXECUTE_HANDLER)
 				{

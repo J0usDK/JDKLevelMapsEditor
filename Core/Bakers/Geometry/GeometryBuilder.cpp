@@ -1,13 +1,15 @@
 #include "StdAfx.h"
-#include "FootprintBuilder.h"
+#include "GeometryBuilder.h"
 
 #include <algorithm>
+#include <cmath>
 #include <vector>
+#include <limits>
 
 #include <Cry3DEngine/IIndexedMesh.h>
 #include <Cry3DEngine/IStatObj.h>
 
-#include "FootprintMask.h"
+#include "GroupGeometry.h"
 #include "Utils/VectorUtils.h"
 
 namespace JDKLevelMaps::JDKEditorSource::Geometry
@@ -58,7 +60,7 @@ namespace JDKLevelMaps::JDKEditorSource::Geometry
 		}
 	}
 
-	std::shared_ptr<const CFootprintMask> BuildMaskFromStatObj(IStatObj* pObj, EFootprintBuildMethod method)
+	std::shared_ptr<const CGroupGeometry> BuildGeometryFromStatObj(IStatObj* pObj, EGeometryBuildMethod method)
 	{
 		if (!pObj)
 			return nullptr;
@@ -69,9 +71,7 @@ namespace JDKLevelMaps::JDKEditorSource::Geometry
 		if (triangles.empty())
 			return nullptr;
 
-		SFootprintParams params;
-
-		if (method == EFootprintBuildMethod::BaseSlice)
+		if (method == EGeometryBuildMethod::BaseSlice)
 		{
 			float zMin = std::numeric_limits<float>::max();
 			float zMax = std::numeric_limits<float>::lowest();
@@ -88,15 +88,17 @@ namespace JDKLevelMaps::JDKEditorSource::Geometry
 			const float height = zMax - zMin;
 			const float sliceHeight = std::clamp(height * kBaseSliceRatio, kBaseSliceMinHeight, std::max(height, kBaseSliceMinHeight));
 
-			params.zMin = zMin;
-			params.zMax = zMin + sliceHeight;
-			params.bFillEnclosedAreas = true;
+			std::vector<STriangle> slice;
+			for (const auto& tri : triangles)
+				ClipTriangleToSlab(tri, zMin, zMin + sliceHeight, slice);
+
+			if (slice.empty())
+				return nullptr;
+
+			return std::make_shared<CGroupGeometry>(std::move(slice), true);
 		}
 
-		auto mask = std::make_shared<CFootprintMask>(BuildFootprintMask(triangles, params));
-		if (mask->IsEmpty())
-			return nullptr;
-		return mask;
+		return std::make_shared<CGroupGeometry>(std::move(triangles), false);
 	}
 
 	float CalculateHorizontalRadius(IStatObj* pObj) noexcept
@@ -109,5 +111,14 @@ namespace JDKLevelMaps::JDKEditorSource::Geometry
 		const float ry = std::max(std::fabs(box.min.y), std::fabs(box.max.y));
 
 		return std::sqrt(rx * rx + ry * ry);
+	}
+
+	float CalculateMaxAbsHeight(IStatObj* pObj) noexcept
+	{
+		if (!pObj)
+			return 0.0f;
+
+		const AABB box = pObj->GetAABB();
+		return std::max(std::fabs(box.min.z), std::fabs(box.max.z));
 	}
 }
